@@ -1,11 +1,13 @@
 import os
 import re
-from typing import Any, Dict, List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from langchain.memory import ConversationBufferMemory
+from langchain_core.messages import BaseMessage
 
 # ---------------------- Config ----------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -57,34 +59,38 @@ def _search(text: str, top_k: int = TOP_K) -> List[Tuple[str, float]]:
 
 
 # ---------------------- Memory ----------------------
-def _update_memory(mem: Dict[str, Any], text: str) -> None:
-    if m := re.search(r"\bmeu\s+nome\s+[eé]\s+([A-ZÁ-Ú][\wÁ-Úá-ú]+)", text, re.IGNORECASE):
-        mem["name"] = m.group(1)
-    if m := re.search(r"\b(tenho|idade)\s+(\d{1,3})\b", text, re.IGNORECASE):
-        mem["age"] = int(m.group(2))
-    if m := re.search(r"\b(doc(?:umento)?|dni|rg|cpf|id)\s*[:#]?\s*([\w\-\.]{4,})\b", text, re.IGNORECASE):
-        mem["doc"] = m.group(2)
-    notes: List[str] = mem.get("notes", [])
-    for line in [s.strip() for s in re.split(r"[.\n]", text) if s.strip()]:
-        if 4 <= len(line) <= 120 and line not in notes:
-            notes.append(line)
-            if len(notes) > 6:
-                notes = notes[-6:]
-            break
-    mem["notes"] = notes
+def create_conversation_memory() -> ConversationBufferMemory:
+    """
+    Create a LangChain conversation memory to track dialogue turns.
+    """
+    return ConversationBufferMemory(memory_key="history", input_key="input", output_key="output", return_messages=True)
 
 
-def _memory_summary(mem: Dict[str, Any]) -> str:
-    bits = []
-    if n := mem.get("name"):
-        bits.append(f"Name: {n}")
-    if a := mem.get("age"):
-        bits.append(f"Age: {a}")
-    if d := mem.get("doc"):
-        bits.append(f"Doc: {d}")
-    if ns := mem.get("notes"):
-        bits.append("Notes: " + "; ".join(ns[:3]))
-    return "; ".join(bits) if bits else "None"
+def _format_messages(history: List[BaseMessage]) -> str:
+    lines: List[str] = []
+    for msg in history[-8:]:
+        role = "User" if msg.type == "human" else "Assistant"
+        content = msg.content.strip()
+        if content:
+            lines.append(f"{role}: {content}")
+    return "\n".join(lines)
+
+
+def _memory_summary(mem: Optional[ConversationBufferMemory]) -> str:
+    if mem is None:
+        return "None"
+    try:
+        data = mem.load_memory_variables({})
+    except Exception:
+        return "None"
+    history = data.get(getattr(mem, "memory_key", "history"))
+    if not history:
+        return "None"
+    if isinstance(history, str):
+        return history.strip() or "None"
+    if isinstance(history, list):
+        return _format_messages(history) or "None"
+    return str(history)
 
 
 # ---------------------- OpenAI helpers ----------------------
@@ -102,7 +108,7 @@ def _openai_text(model: str, prompt: str, max_tokens: int = 400, temperature: fl
 
 
 # ---------------------- Generative helpers (OpenAI) ----------------------
-def _gen_queries(user_input: str, mem: Dict[str, Any]) -> List[str]:
+def _gen_queries(user_input: str, mem: Optional[ConversationBufferMemory]) -> List[str]:
     try:
         prompt = (
             "Generate 3 to 5 short search queries (one per line) to retrieve useful "
@@ -116,12 +122,12 @@ def _gen_queries(user_input: str, mem: Dict[str, Any]) -> List[str]:
         return [user_input]
 
 
-def _answer_smalltalk(user_input: str, mem: Dict[str, Any]) -> str:
+def _answer_smalltalk(user_input: str, mem: Optional[ConversationBufferMemory]) -> str:
     """
     Short, friendly small-talk via OpenAI. One sentence; language-aware.
     """
-    name = mem.get("name")
-    persona = (f"User name: {name}. " if name else "") + "Be friendly, concise, and professional."
+    history_summary = _memory_summary(mem)
+    persona = (f"Conversation so far: {history_summary}\n" if history_summary != "None" else "") + "Be friendly, concise, and professional."
     prompt = f"""
                 You are a helpful support assistant doing small talk. {persona}
                 Requirements:
@@ -139,11 +145,13 @@ def _answer_smalltalk(user_input: str, mem: Dict[str, Any]) -> str:
         return "Claro! Como posso ajudar?"
 
 
-def _answer_with_openai(user_input: str, mem: Dict[str, Any], context_chunks: List[str]) -> str:
+def _answer_with_openai(user_input: str, mem: Optional[ConversationBufferMemory], context_chunks: List[str]) -> str:
     kb_block = "\n\n---\n\n".join(context_chunks) if context_chunks else "(no KB snippets)"
     prompt = f"""
-                You are an assistant that must answer using ONLY the information provided in the Knowledge Base excerpts.
-                If the answer is not in the KB, say you don't have enough info and suggest talking to a human.
+                You are an assistant that must answer using the Knowledge Base excerpts and the conversation memory.
+                - Use the Knowledge Base for product/policy/support facts.
+                - Use the conversation memory for personalization or questions about prior dialogue.
+                - If neither source gives the answer, say you don't have enough info and suggest talking to a human.
 
                 User message:
                 \"\"\"{user_input}\"\"\"
@@ -162,7 +170,7 @@ def _answer_with_openai(user_input: str, mem: Dict[str, Any], context_chunks: Li
     return _openai_text(MODEL_ANSWER, prompt, max_tokens=400, temperature=0.3)
 
 
-def _route_intent(user_input: str, mem: Dict[str, Any]) -> str:
+def _route_intent(user_input: str, mem: Optional[ConversationBufferMemory]) -> str:
     """
     Ask the model to pick exactly one: smalltalk | human | business.
     Fallback defaults to the business flow if the call fails.
