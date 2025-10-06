@@ -1,0 +1,111 @@
+{
+  "meta": {
+    "title": "Menu Principal",
+    "handoff_keywords": [
+      "atendente",
+      "humano",
+      "agent",
+      "pessoa",
+      "suporte"
+    ],
+    "aliases_menu": [
+      "menu",
+      "help",
+      "oi",
+      "olá",
+      "ola",
+      "hello",
+      "hi",
+      "start",
+      "#"
+    ],
+    "aliases_back": [
+      "0",
+      "voltar",
+      "back"
+    ]
+  },
+  "nodes": {
+    "root": {
+      "type": "menu",
+      "text": "Olá! Como podemos ajudar?\n1) Preços\n2) FAQ\n3) Agendar atendimento\n0) Falar com atendente",
+      "options": [
+        {
+          "key": "1",
+          "label": "Preços",
+          "goto": "prices"
+        },
+        {
+          "key": "2",
+          "label": "FAQ",
+          "goto": "faq_menu"
+        },
+        {
+          "key": "3",
+          "label": "Agendar atendimento",
+          "goto": "schedule"
+        },
+        {
+          "key": "0",
+          "label": "Atendente",
+          "goto": "handoff"
+        }
+      ]
+    },
+    "prices": {
+      "type": "message",
+      "text": "Planos e preços:\n- Básico: $99/mês\n- Pro: $249/mês\n- Enterprise: sob consulta\n\nDigite # para voltar ao menu."
+    },
+    "faq_menu": {
+      "type": "menu",
+      "text": "FAQ\n1) Prazos de entrega\n2) Horário de suporte\n3) Cancelamento\n#) Menu\n0) Atendente",
+      "options": [
+        {
+          "key": "1",
+          "label": "Entrega",
+          "goto": "faq_entrega"
+        },
+        {
+          "key": "2",
+          "label": "Suporte",
+          "goto": "faq_suporte"
+        },
+        {
+          "key": "3",
+          "label": "Cancelamento",
+          "goto": "faq_cancelamento"
+        },
+        {
+          "key": "#",
+          "label": "Menu",
+          "goto": "root"
+        },
+        {
+          "key": "0",
+          "label": "Atendente",
+          "goto": "handoff"
+        }
+      ]
+    },
+    "faq_entrega": {
+      "type": "message",
+      "text": "Entrega: em até 24h úteis.\n\nDigite # para menu ou 0 para atendente."
+    },
+    "faq_suporte": {
+      "type": "message",
+      "text": "Suporte: 9h–18h (seg–sex).\n\nDigite # para menu ou 0 para atendente."
+    },
+    "faq_cancelamento": {
+      "type": "message",
+      "text": "Cancelamento: a qualquer momento, sem multa.\n\nDigite # para menu ou 0 para atendente."
+    },
+    "schedule": {
+      "type": "message",
+      "text": "Para agendar, responda com sua disponibilidade (data/horário)\nou digite 0 para falar com atendente.\n\nDigite # para voltar ao menu."
+    },
+    "handoff": {
+      "type": "handoff",
+      "text": "Ok! Vou te passar para um atendente humano agora. 🙋"
+    }
+  }
+}
