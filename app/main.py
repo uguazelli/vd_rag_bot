@@ -1,18 +1,15 @@
 from fastapi import FastAPI, Request
 # from app.menu import initial_state, handle_input
 from app.rag import initial_state, handle_input
-
 import httpx, os
 
 app = FastAPI()
 SESSIONS = {}
 
 # Defaults are cheap/solid; override via env if you want
-MODEL_ANSWER  = os.getenv("BOT_ACCESS_TOKEN",  "nS7yBjTg66L29cSUVypLQnGB")
-MODEL_QUERIES = os.getenv("CHATWOOT_API_URL", "http://localhost:3000/api/v1")
+BOT_ACCESS_TOKEN  = os.getenv("BOT_ACCESS_TOKEN",  "nS7yBjTg66L29cSUVypLQnGB")
+CHATWOOT_API_URL = os.getenv("CHATWOOT_API_URL", "http://localhost:3000/api/v1")
 
-# BOT_ACCESS_TOKEN = "nS7yBjTg66L29cSUVypLQnGB"
-# CHATWOOT_API_URL = "http://localhost:3000/api/v1"
 
 @app.get("/health")
 async def health():
@@ -25,9 +22,8 @@ async def bot(request: Request):
     assignee_id = (convo.get("meta", {}) or {}).get("assignee", {}) or {}
     assignee_id = assignee_id.get("id")
 
-    print("👤 assignee_id: ", assignee_id)
-
     if assignee_id:
+        print("❌ Ignoring conversation assigned to someone.")
         return {"status": "ignored conversation assigned"}
 
     # 1. Must be a message creation event.
@@ -54,6 +50,11 @@ async def bot(request: Request):
     state = SESSIONS.get(user_id) or initial_state()
     state, reply, status = handle_input(state, text)
     SESSIONS[user_id] = state
+
+    print("🤖 Bot reply:", reply)
+    print("🤖 Bot status:", status)
+    print("🤖 Bot state:", state)
+
 
     # Post reply once (Chatwoot will emit an 'outgoing' webhook; we ignore it above)
     async with httpx.AsyncClient() as client:
