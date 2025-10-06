@@ -27,24 +27,6 @@ _KB_TEXTS: List[str] = []
 _VECTORIZER: TfidfVectorizer | None = None
 _KB_MATRIX: np.ndarray | None = None
 
-# Quick patterns for explicit human intent
-HUMAN_INTENT_PATTERNS = [
-    r"\b(agente|humano|pessoa|atendente|operador)\b",
-    r"\b(falar|conversar)\s+(com|c/)\s+(algu[eé]m|humano|atendente)\b",
-    r"\b(human|agent|representative|live\s*agent|talk to someone)\b",
-    r"^\s*0\s*$",
-]
-
-# Optional smalltalk patterns (used by router fallback)
-SMALLTALK_PATTERNS = [
-    r"^\s*(hi|hello|hey|ol[aá]|oi|yo|sup)\s*[!.\)]*\s*$",
-    r"^\s*(good\s*(morning|afternoon|evening)|boa\s*(tarde|noite|dia))\s*!*\s*$",
-    r"^\s*(thanks|thank\s*you|obrigad[oa])\s*!*\s*$",
-    r"^\s*(ok|okay|beleza|blz|ty|tks|👍|👌|🙂|😄|😉)\s*$",
-    r"^\s*(how\s*are\s*you|tudo\s*bem\??|como\s*vai\??)\s*$",
-]
-
-
 # ---------------------- KB helpers ----------------------
 def _read_txt_chunks(path: str) -> List[str]:
     if not os.path.exists(path):
@@ -126,25 +108,6 @@ def _gen_queries(user_input: str, mem: Dict[str, Any]) -> List[str]:
     except Exception:
         return [user_input]
 
-def _classify_human_intent(text: str) -> bool:
-    if any(re.search(p, text, re.IGNORECASE) for p in HUMAN_INTENT_PATTERNS):
-        return True
-    try:
-        ans = _openai_text(
-            MODEL_QUERIES,
-            "Answer YES or NO: Is the user asking to talk to a human agent?\nUser: " + text,
-            max_tokens=4, temperature=0.0
-        ).upper()
-        return ans.startswith("Y")
-    except Exception:
-        return False
-
-def _is_smalltalk(text: str) -> bool:
-    t = (text or "").strip().lower()
-    if not t:
-        return False
-    return any(re.search(p, t, re.IGNORECASE) for p in SMALLTALK_PATTERNS)
-
 def _answer_smalltalk(user_input: str, mem: Dict[str, Any]) -> str:
     """
     Short, friendly small-talk via OpenAI. One sentence; language-aware.
@@ -152,15 +115,15 @@ def _answer_smalltalk(user_input: str, mem: Dict[str, Any]) -> str:
     name = mem.get("name")
     persona = (f"User name: {name}. " if name else "") + "Be friendly, concise, and professional."
     prompt = f"""
-You are a helpful support assistant doing small talk. {persona}
-Requirements:
-- Reply in the same language as the user message below.
-- Keep it to ONE short sentence (<= 18 words).
-- Be warm and natural; 0–1 emoji max.
-- Do NOT reference any knowledge base.
-- If the user says thanks, offer help once.
-User message: {user_input}
-""".strip()
+                You are a helpful support assistant doing small talk. {persona}
+                Requirements:
+                - Reply in the same language as the user message below.
+                - Keep it to ONE short sentence (<= 18 words).
+                - Be warm and natural; 0–1 emoji max.
+                - Do NOT reference any knowledge base.
+                - If the user says thanks, offer help once.
+                User message: {user_input}
+                """.strip()
     try:
         text = _openai_text(MODEL_QUERIES, prompt, max_tokens=40, temperature=0.7)
         return (text.split("\n")[0] or "Claro! Como posso ajudar?")[:240]
@@ -170,40 +133,40 @@ User message: {user_input}
 def _answer_with_openai(user_input: str, mem: Dict[str, Any], context_chunks: List[str]) -> str:
     kb_block = "\n\n---\n\n".join(context_chunks) if context_chunks else "(no KB snippets)"
     prompt = f"""
-You are an assistant that must answer using ONLY the information provided in the Knowledge Base excerpts.
-If the answer is not in the KB, say you don't have enough info and suggest talking to a human.
+                You are an assistant that must answer using ONLY the information provided in the Knowledge Base excerpts.
+                If the answer is not in the KB, say you don't have enough info and suggest talking to a human.
 
-User message:
-\"\"\"{user_input}\"\"\"
+                User message:
+                \"\"\"{user_input}\"\"\"
 
-Conversation memory (if helpful):
-{_memory_summary(mem)}
+                Conversation memory (if helpful):
+                {_memory_summary(mem)}
 
-Knowledge Base excerpts:
-{kb_block}
+                Knowledge Base excerpts:
+                {kb_block}
 
-Instructions:
-- Be concise and clear.
-- If user explicitly asks to talk to a human, do NOT answer: return the token HUMAN_AGENT.
-- If the KB does not cover the answer, say so briefly and suggest a human handoff.
-""".strip()
+                Instructions:
+                - Be concise and clear.
+                - If user explicitly asks to talk to a human, do NOT answer: return the token HUMAN_AGENT.
+                - If the KB does not cover the answer, say so briefly and suggest a human handoff.
+                """.strip()
     return _openai_text(MODEL_ANSWER, prompt, max_tokens=400, temperature=0.3)
 
 def _route_intent(user_input: str, mem: Dict[str, Any]) -> str:
     """
-    Ask the model to pick exactly one: smalltalk | human | business
-    Fallback to heuristics if the call fails.
+    Ask the model to pick exactly one: smalltalk | human | business.
+    Fallback defaults to the business flow if the call fails.
     """
     prompt = f"""
-Classify the user's message into exactly ONE of these intents:
-- smalltalk: greetings, thanks, pleasantries, emojis, chit-chat.
-- human: they want to talk to a human/agent/sales/support.
-- business: a product/pricing/support/use-case question that needs KB/RAG.
+            Classify the user's message into exactly ONE of these intents:
+            - smalltalk: greetings, thanks, pleasantries, emojis, chit-chat.
+            - human: they want to talk to a human/agent/sales/support.
+            - business: a product/pricing/support/use-case question that needs KB/RAG.
 
-Return only one token: smalltalk | human | business.
-User: {user_input}
-Known: {_memory_summary(mem)}
-""".strip()
+            Return only one token: smalltalk | human | business.
+            User: {user_input}
+            Known: {_memory_summary(mem)}
+            """.strip()
     try:
         label = (_openai_text(MODEL_QUERIES, prompt, max_tokens=5, temperature=0.1) or "").strip().lower()
         if label.startswith("small"):
@@ -215,11 +178,7 @@ Known: {_memory_summary(mem)}
     except Exception:
         pass
 
-    # Fallback heuristics
-    if _classify_human_intent(user_input):
-        return "human"
-    if _is_smalltalk(user_input):
-        return "smalltalk"
+    # Fallback: default to business flow if classification fails
     return "business"
 
 
