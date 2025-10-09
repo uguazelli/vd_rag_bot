@@ -3,7 +3,7 @@ import time
 from typing import Any, Dict, List
 
 from langchain.memory import ConversationBufferMemory
-from app.helpers import (
+from .helpers import (
     TOP_K,
     _answer_smalltalk,
     _answer_with_openai,
