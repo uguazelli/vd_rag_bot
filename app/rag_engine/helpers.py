@@ -1,6 +1,7 @@
 import os
 import re
 from typing import List, Optional, Tuple
+from pathlib import Path
 
 import numpy as np
 from openai import OpenAI
@@ -20,7 +21,10 @@ client = OpenAI()
 MODEL_ANSWER = os.getenv("OPENAI_MODEL_ANSWER", "gpt-4o-mini")
 MODEL_QUERIES = os.getenv("OPENAI_MODEL_QUERIES", "gpt-4.1-mini")
 
-KB_PATH = os.getenv("KNOWLEDGE_FILE", "./kb.txt")
+KB_PATH = os.getenv(
+    "KNOWLEDGE_FILE",
+    str((Path(__file__).parent / "kb.txt").resolve())
+)
 TOP_K = int(os.getenv("TOP_K", "4"))
 
 # ---------------------- KB in-memory ----------------------

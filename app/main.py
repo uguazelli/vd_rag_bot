@@ -1,18 +1,34 @@
 from fastapi import FastAPI, Request
 # from app.menu import initial_state, handle_input
-from app.rag import initial_state, handle_input
+from app.chatwoot.handleContactUpdated import handleContactCreated
+from app.chatwoot.handoff import perform_handoff, send_message
+from app.rag_engine.rag import initial_state, handle_input
 import httpx, os
 
 app = FastAPI()
 SESSIONS = {}
 
 # Defaults are cheap/solid; override via env if you want
-BOT_ACCESS_TOKEN  = os.getenv("BOT_ACCESS_TOKEN",  "nS7yBjTg66L29cSUVypLQnGB")
+BOT_ACCESS_TOKEN  = os.getenv("BOT_ACCESS_TOKEN")
 CHATWOOT_API_URL = os.getenv("CHATWOOT_API_URL", "http://localhost:3000/api/v1")
-
+HANDOFF_PUBLIC_REPLY = os.getenv(
+    "HANDOFF_PUBLIC_REPLY", "Ok, please hold on while I connect you with a human agent."
+)
+HANDOFF_PRIVATE_NOTE = os.getenv(
+    "HANDOFF_PRIVATE_NOTE", "Bot routed the conversation for human follow-up."
+)
+HANDOFF_PRIORITY = os.getenv("HANDOFF_PRIORITY", "high")
 
 @app.get("/health")
 async def health():
+    print("🤖 Health check", flush=True)
+    return {"status": "True"}
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
+    # print("🤖 Webhook:", data)
+    # handleContactCreated(data)
     return {"status": "ok"}
 
 @app.post("/bot")
@@ -59,17 +75,26 @@ async def bot(request: Request):
     # Post reply once (Chatwoot will emit an 'outgoing' webhook; we ignore it above)
     async with httpx.AsyncClient() as client:
         if reply == "human_agent":
-            # (A) post a short private note for agents (optional)
-            # (B) call Chatwoot API: assign + toggle_bot
-            # then return 200 without sending a public message
+            await perform_handoff(
+                client=client,
+                account_id=account_id,
+                conversation_id=conversation_id,
+                api_url=CHATWOOT_API_URL,
+                access_token=BOT_ACCESS_TOKEN,
+                public_reply=HANDOFF_PUBLIC_REPLY,
+                private_note=HANDOFF_PRIVATE_NOTE,
+                priority=HANDOFF_PRIORITY,
+            )
             return {"status": "handoff"}
 
-        resp = await client.post(
-            f"{CHATWOOT_API_URL}/accounts/{account_id}/conversations/{conversation_id}/messages",
-            headers={"Content-Type": "application/json", "api_access_token": BOT_ACCESS_TOKEN},
-            json={"content": reply, "message_type": "outgoing", "private": False},
+        await send_message(
+            client=client,
+            api_url=CHATWOOT_API_URL,
+            access_token=BOT_ACCESS_TOKEN,
+            account_id=account_id,
+            conversation_id=conversation_id,
+            content=reply,
+            private=False,
         )
-        if resp.status_code != 200:
-            print("❌ Error posting message:", resp.status_code, resp.text)
 
     return {"status": "success"}

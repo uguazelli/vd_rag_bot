@@ -1,0 +1,59 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+    container_name: vd_rag_bot_app
+    command:
+      - uv
+      - run
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --reload
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://vd_bot:vd_bot@db:5432/vd_bot}
+      BOT_ACCESS_TOKEN: ${BOT_ACCESS_TOKEN:-nS7yBjTg66L29cSUVypLQnGB}
+      CHATWOOT_API_URL: ${CHATWOOT_API_URL:-http://localhost:3000/api/v1}
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16
+    container_name: vd_rag_bot_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vd_bot}
+      POSTGRES_USER: ${POSTGRES_USER:-vd_bot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vd_bot}
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-vd_bot} -d ${POSTGRES_DB:-vd_bot}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  pgdata:
