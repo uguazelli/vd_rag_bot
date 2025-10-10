@@ -28,7 +28,7 @@ async def health():
 async def webhook(request: Request):
     data = await request.json()
     # print("🤖 Webhook:", data)
-    # handleContactCreated(data)
+    handleContactCreated(data)
     return {"status": "ok"}
 
 @app.post("/bot")
