@@ -112,7 +112,7 @@ def handleContactCreated(data: Dict[str, Any]):
 
     payload = _extract_contact_payload(contact)
     if not payload.get("name") and not payload.get("emails"):
-        print("⚠️ Skipping Twenty sync, insufficient data:", payload)
+        # print("⚠️ Skipping Twenty sync, insufficient data:", payload)
         return
 
     account_id = (
