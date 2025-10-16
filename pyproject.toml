@@ -3,14 +3,11 @@ name = "vd-bot"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "fastapi>=0.118.0",
-    "google-generativeai>=0.8.5",
     "httpx>=0.28.1",
-    "langchain>=0.3.7",
-    "numpy>=2.3.3",
+    "llama-index>=0.14.5",
     "openai>=1.35.10",
-    "scikit-learn>=1.7.2",
     "uvicorn[standard]>=0.37.0",
 ]
