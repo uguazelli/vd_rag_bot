@@ -56,11 +56,11 @@ def upsert_contact(
                 params=params,
                 timeout=10.0,
             )
-            print("📥 Twenty PATCH response:", resp.status_code, resp.text)
+
             if resp.status_code < 300:
                 data = resp.json() if resp.content else {}
                 extracted = _extract_id(data) or crm_id
-                print("✅ Twenty PATCH succeeded:", data)
+                print("✅ Twenty PATCH succeeded")
                 return str(extracted)
             if resp.status_code == 404:
                 print("ℹ️ Twenty contact not found, will create new record.")
@@ -80,12 +80,12 @@ def upsert_contact(
             params=params,
             timeout=10.0,
         )
-        print("📥 Twenty POST response:", resp.status_code, resp.text)
+        print("📥 Twenty POST response")
         if resp.status_code < 300:
             data = resp.json() if resp.content else {}
             new_id = _extract_id(data)
             if new_id:
-                print("✅ Twenty POST succeeded:", data)
+                print("✅ Twenty POST succeeded:")
                 return str(new_id)
             print("⚠️ Twenty POST succeeded but no id found in response:", data)
         else:

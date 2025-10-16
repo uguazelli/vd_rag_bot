@@ -9,8 +9,9 @@ app = FastAPI()
 SESSIONS = {}
 
 # Defaults are cheap/solid; override via env if you want
-BOT_ACCESS_TOKEN  = os.getenv("BOT_ACCESS_TOKEN")
+CHATWOOT_BOT_ACCESS_TOKEN  = os.getenv("CHATWOOT_BOT_ACCESS_TOKEN")
 CHATWOOT_API_URL = os.getenv("CHATWOOT_API_URL", "http://localhost:3000/api/v1")
+
 HANDOFF_PUBLIC_REPLY = os.getenv(
     "HANDOFF_PUBLIC_REPLY", "Ok, please hold on while I connect you with a human agent."
 )
@@ -80,7 +81,7 @@ async def bot(request: Request):
                 account_id=account_id,
                 conversation_id=conversation_id,
                 api_url=CHATWOOT_API_URL,
-                access_token=BOT_ACCESS_TOKEN,
+                access_token=CHATWOOT_BOT_ACCESS_TOKEN,
                 public_reply=HANDOFF_PUBLIC_REPLY,
                 private_note=HANDOFF_PRIVATE_NOTE,
                 priority=HANDOFF_PRIORITY,
@@ -90,7 +91,7 @@ async def bot(request: Request):
         await send_message(
             client=client,
             api_url=CHATWOOT_API_URL,
-            access_token=BOT_ACCESS_TOKEN,
+            access_token=CHATWOOT_BOT_ACCESS_TOKEN,
             account_id=account_id,
             conversation_id=conversation_id,
             content=reply,

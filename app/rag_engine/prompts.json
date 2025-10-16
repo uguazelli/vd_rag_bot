@@ -1,0 +1,52 @@
+{
+  "queries": [
+    "Generate 3 to 5 short search queries (one per line) to retrieve useful snippets from my knowledge base for the user question.",
+    "",
+    "User question: $user_input",
+    "",
+    "User memory: $memory",
+    "",
+    "Only output the queries, no bullets, no numbering."
+  ],
+  "smalltalk": [
+    "You are a helpful support assistant doing small talk.",
+    "$persona",
+    "Requirements:",
+    "- Reply in the same language as the user message below.",
+    "- Keep it to ONE short sentence (<= 18 words).",
+    "- Be warm and natural; 0-1 emoji max.",
+    "- Do NOT reference any knowledge base.",
+    "- If the user says thanks, offer help once.",
+    "User message: $user_input"
+  ],
+  "answer": [
+    "You are an assistant that must answer using the Knowledge Base excerpts and the conversation memory.",
+    "- Use the Knowledge Base for product/policy/support facts.",
+    "- Use the conversation memory for personalization or questions about prior dialogue.",
+    "- If neither source gives the answer, say you do not have enough info and suggest talking to a human.",
+    "",
+    "User message:",
+    "\"\"\"$user_input\"\"\"",
+    "",
+    "Conversation memory (if helpful):",
+    "$memory",
+    "",
+    "Knowledge Base excerpts:",
+    "$knowledge_base",
+    "",
+    "Instructions:",
+    "- Be concise and clear.",
+    "- If user explicitly asks to talk to a human, do NOT answer: return the token HUMAN_AGENT.",
+    "- If the KB does not cover the answer, say so briefly and suggest a human handoff."
+  ],
+  "route": [
+    "Classify the user's message into exactly ONE of these intents:",
+    "- smalltalk: greetings, thanks, pleasantries, emojis, chit-chat.",
+    "- human: they want to talk to a human/agent/sales/support.",
+    "- business: a product/pricing/support/use-case question that needs KB/RAG.",
+    "",
+    "Return only one token: smalltalk | human | business.",
+    "User: $user_input",
+    "Known: $memory"
+  ]
+}

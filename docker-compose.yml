@@ -1,4 +1,4 @@
-version: "3.9"
+name: vd-bot
 
 services:
   app:
@@ -19,7 +19,7 @@ services:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://vd_bot:vd_bot@db:5432/vd_bot}
-      BOT_ACCESS_TOKEN: ${BOT_ACCESS_TOKEN:-nS7yBjTg66L29cSUVypLQnGB}
+      CHATWOOT_BOT_ACCESS_TOKEN: ${CHATWOOT_BOT_ACCESS_TOKEN:-nS7yBjTg66L29cSUVypLQnGB}
       CHATWOOT_API_URL: ${CHATWOOT_API_URL:-http://localhost:3000/api/v1}
     ports:
       - "8080:8080"
