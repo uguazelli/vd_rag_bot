@@ -11,3 +11,9 @@ dependencies = [
     "openai>=1.35.10",
     "uvicorn[standard]>=0.37.0",
 ]
+
+[project.scripts]
+rag-ingest = "app.rag_engine.ingest:main"
+
+[tool.uv]
+package = true
