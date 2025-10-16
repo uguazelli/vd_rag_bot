@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict, Any, Tuple
 import json
 
-# Load menus.json (must be in the SAME folder as menu.py)
+# Load menus.json (must be in the same folder as menu.py)
 MENU_TREE: Dict[str, Any] = json.loads(
     Path(__file__).with_name("menus.json").read_text(encoding="utf-8")
 )
@@ -35,7 +35,7 @@ def _options_for(node_id: str) -> Dict[str, str]:
     return {opt["key"]: opt["goto"] for opt in node.get("options", [])}
 
 def handle_input(state: Dict[str, Any], text: str) -> Tuple[Dict[str, Any], str, str]:
-    # atalhos globais
+    # Global shortcuts
     if _is_handoff(text):
         state["current"] = "handoff"
         return state, _render("handoff"), "handoff"
@@ -55,7 +55,7 @@ def handle_input(state: Dict[str, Any], text: str) -> Tuple[Dict[str, Any], str,
             if tgt.get("type") == "handoff":
                 return state, tgt.get("text", ""), "handoff"
             return state, tgt.get("text", ""), "ok"
-        return state, node.get("text", ""), "ok"  # inválido: repete menu
+        return state, node.get("text", ""), "ok"  # Invalid option: repeat menu
 
     if node.get("type") == "message":
         if (text or "").strip() == "0" or _is_handoff(text):
@@ -64,7 +64,7 @@ def handle_input(state: Dict[str, Any], text: str) -> Tuple[Dict[str, Any], str,
         if _is_menu_alias(text) or _is_back_alias(text):
             state["current"] = "root"
             return state, _render("root"), "ok"
-        return state, node.get("text", ""), "ok"  # inválido: repete mensagem
+        return state, node.get("text", ""), "ok"  # Invalid input: repeat message
 
-    # handoff mantém
+    # Already in handoff
     return state, node.get("text", ""), "handoff"

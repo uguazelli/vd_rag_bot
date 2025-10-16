@@ -1,38 +1,41 @@
 {
   "meta": {
-    "title": "Menu Principal",
+    "title": "Main Menu",
     "handoff_keywords": [
+      "agent",
+      "human",
+      "support",
+      "person",
+      "representative",
       "atendente",
       "humano",
-      "agent",
       "pessoa",
       "suporte"
     ],
     "aliases_menu": [
       "menu",
       "help",
-      "oi",
-      "olá",
-      "ola",
       "hello",
       "hi",
+      "oi",
+      "ola",
       "start",
       "#"
     ],
     "aliases_back": [
       "0",
-      "voltar",
-      "back"
+      "back",
+      "voltar"
     ]
   },
   "nodes": {
     "root": {
       "type": "menu",
-      "text": "Olá! Como podemos ajudar?\n1) Preços\n2) FAQ\n3) Agendar atendimento\n0) Falar com atendente",
+      "text": "Hello! How can we help?\n1) Pricing\n2) FAQ\n3) Book a meeting\n0) Talk to a human",
       "options": [
         {
           "key": "1",
-          "label": "Preços",
+          "label": "Pricing",
           "goto": "prices"
         },
         {
@@ -42,37 +45,37 @@
         },
         {
           "key": "3",
-          "label": "Agendar atendimento",
+          "label": "Book a meeting",
           "goto": "schedule"
         },
         {
           "key": "0",
-          "label": "Atendente",
+          "label": "Human agent",
           "goto": "handoff"
         }
       ]
     },
     "prices": {
       "type": "message",
-      "text": "Planos e preços:\n- Básico: $99/mês\n- Pro: $249/mês\n- Enterprise: sob consulta\n\nDigite # para voltar ao menu."
+      "text": "Plans and pricing:\n- Basic: $99/mo\n- Pro: $249/mo\n- Enterprise: contact us for a quote\n\nType # to return to the menu."
     },
     "faq_menu": {
       "type": "menu",
-      "text": "FAQ\n1) Prazos de entrega\n2) Horário de suporte\n3) Cancelamento\n#) Menu\n0) Atendente",
+      "text": "FAQ\n1) Delivery times\n2) Support hours\n3) Cancellation policy\n#) Menu\n0) Human agent",
       "options": [
         {
           "key": "1",
-          "label": "Entrega",
+          "label": "Delivery",
           "goto": "faq_entrega"
         },
         {
           "key": "2",
-          "label": "Suporte",
+          "label": "Support",
           "goto": "faq_suporte"
         },
         {
           "key": "3",
-          "label": "Cancelamento",
+          "label": "Cancellation",
           "goto": "faq_cancelamento"
         },
         {
@@ -82,30 +85,30 @@
         },
         {
           "key": "0",
-          "label": "Atendente",
+          "label": "Human agent",
           "goto": "handoff"
         }
       ]
     },
     "faq_entrega": {
       "type": "message",
-      "text": "Entrega: em até 24h úteis.\n\nDigite # para menu ou 0 para atendente."
+      "text": "Delivery: within 24 business hours.\n\nType # for the menu or 0 for a human agent."
     },
     "faq_suporte": {
       "type": "message",
-      "text": "Suporte: 9h–18h (seg–sex).\n\nDigite # para menu ou 0 para atendente."
+      "text": "Support hours: 9am–6pm (Mon–Fri).\n\nType # for the menu or 0 for a human agent."
     },
     "faq_cancelamento": {
       "type": "message",
-      "text": "Cancelamento: a qualquer momento, sem multa.\n\nDigite # para menu ou 0 para atendente."
+      "text": "Cancellation: anytime, no penalty.\n\nType # for the menu or 0 for a human agent."
     },
     "schedule": {
       "type": "message",
-      "text": "Para agendar, responda com sua disponibilidade (data/horário)\nou digite 0 para falar com atendente.\n\nDigite # para voltar ao menu."
+      "text": "To schedule, reply with your availability (date/time)\nor type 0 to talk to a human agent.\n\nType # to return to the menu."
     },
     "handoff": {
       "type": "handoff",
-      "text": "Ok! Vou te passar para um atendente humano agora. 🙋"
+      "text": "Okay! I'll connect you with a human agent now. 🙋"
     }
   }
 }
