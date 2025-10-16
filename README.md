@@ -43,6 +43,23 @@ The API will be available on http://localhost:8080. Containers include the FastA
 ## Local (non-Docker) commands
 
 ```bash
+uv sync --python 3.11
 uv run --python 3.11 -- python -c "import sys; print(sys.executable, sys.version)"
 uv run --python 3.11 --env-file .env uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
+
+## Knowledge base ingestion
+
+- rag-ingest requires the project to be installed with uv sync
+
+1. Place the files you want indexed under `app/rag_engine/storage/`. Subfolders are supported.
+2. Ensure your `.env` (or environment) exposes the OpenAI credentials and any custom `RAG_*` overrides.
+3. (Re)build the vector store:
+   ```bash
+   uv run --python 3.11 --env-file .env rag-ingest
+   ```
+   The command wipes the existing persisted vectors in `app/rag_engine/storage/vector_store/` and recreates them from the files in step 1.
+   If the CLI entry point is unavailable, run:
+   ```bash
+   uv run --python 3.11 --env-file .env python -m app.rag_engine.ingest
+   ```
