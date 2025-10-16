@@ -7,7 +7,7 @@ import httpx
 from app.twenty import upsert_contact
 
 CHATWOOT_API_URL = os.getenv("CHATWOOT_API_URL", "http://localhost:3000/api/v1")
-CHATWOOT_BOT_TOKEN = os.getenv("BOT_ACCESS_TOKEN", "nS7yBjTg66L29cSUVypLQnGB")
+CHATWOOT_BOT_TOKEN = os.getenv("CHATWOOT_BOT_ACCESS_TOKEN", "nS7yBjTg66L29cSUVypLQnGB")
 
 
 def _headers_chatwoot() -> Dict[str, str]:
@@ -25,7 +25,7 @@ def _clean(value: Optional[str]) -> Optional[str]:
 
 
 def _extract_contact_payload(contact: Dict[str, Any]) -> Dict[str, Any]:
-    print("🔍 Extracting payload from contact:", contact)
+    # print("🔍 Extracting payload from contact:", contact)
     name = _clean(contact.get("name"))
     parts = re.split(r"\s+", name) if name else []
     first_name = parts[0] if parts else None
@@ -89,7 +89,7 @@ def _update_chatwoot_crm_id(
             json={"custom_attributes": {"crm_id": crm_id}},
             timeout=10.0,
         )
-        print("📥 Chatwoot response:", resp.status_code, resp.text)
+        # print("📥 Chatwoot response:", resp.status_code, resp.text)
         if resp.status_code >= 300:
             print("❌ Chatwoot contact update failed:", resp.status_code, resp.text)
             return False
@@ -101,7 +101,7 @@ def _update_chatwoot_crm_id(
 
 
 def handleContactCreated(data: Dict[str, Any]):
-    print("🚀 handleContactCreated invoked with:", data)
+    # print("🚀 handleContactCreated invoked with:", data)
     contact = data.get("contact") or data
     if not isinstance(contact, dict):
         print("⚠️ No contact payload to sync.")
