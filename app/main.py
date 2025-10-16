@@ -45,17 +45,17 @@ async def bot(request: Request):
 
     # 1. Must be a message creation event.
     if data.get("event") != "message_created":
-        print("❌ Ignoring non-message event:", data.get("event"))
+        # print("❌ Ignoring non-message event:", data.get("event"))
         return {"status": "ignored_event"}
 
     # 2. MUST be 'incoming' (from user). This reliably prevents the infinite loop.
     if data.get("message_type") != "incoming":
-        print("❌ Ignoring outgoing or internal message.")
+        # print("❌ Ignoring outgoing or internal message.")
         return {"status": "ignored_outgoing"}
 
     # 3. Ensure a sender exists to prevent KeyError later
     if "sender" not in data:
-        print("❌ Ignoring message with no sender.")
+        # print("❌ Ignoring message with no sender.")
         return {"status": "ignored_no_sender"}
 
     account_id = data["account"]["id"]
@@ -76,6 +76,7 @@ async def bot(request: Request):
     # Post reply once (Chatwoot will emit an 'outgoing' webhook; we ignore it above)
     async with httpx.AsyncClient() as client:
         if reply == "human_agent":
+            print("🤖 Routing to human agent")
             await perform_handoff(
                 client=client,
                 account_id=account_id,

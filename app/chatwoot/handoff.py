@@ -1,7 +1,5 @@
 from typing import Optional
-
 import httpx
-
 
 def _headers(access_token: str) -> dict[str, str]:
     return {"Content-Type": "application/json", "api_access_token": access_token}
@@ -46,6 +44,7 @@ async def perform_handoff(
     private_note: Optional[str],
     priority: Optional[str],
 ) -> None:
+    print(f"📡 Sending public reply and private note ")
     await send_message(
         client=client,
         api_url=api_url,
@@ -65,10 +64,11 @@ async def perform_handoff(
         private=True,
     )
 
-    if not priority:
-        return
-
     try:
+        print(
+            f"🔧 Updating priority to {priority!r} "
+            f"(account={account_id}, conversation={conversation_id})"
+        )
         resp = await client.patch(
             f"{api_url}/accounts/{account_id}/conversations/{conversation_id}",
             headers=_headers(access_token),
@@ -76,5 +76,10 @@ async def perform_handoff(
         )
         if resp.status_code >= 300:
             print("❌ Error setting priority:", resp.status_code, resp.text)
+        else:
+            print(
+                f"✅ Priority set to {priority!r} "
+                f"(account={account_id}, conversation={conversation_id})"
+            )
     except httpx.HTTPError as exc:
         print("❌ HTTP error setting priority:", exc)
