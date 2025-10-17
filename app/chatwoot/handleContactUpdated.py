@@ -1,13 +1,11 @@
-import os
 import re
 from typing import Any, Dict, Optional
-
 import httpx
-
 from app.twenty import upsert_contact
+from app.config import settings
 
-CHATWOOT_API_URL = os.getenv("CHATWOOT_API_URL", "http://localhost:3000/api/v1")
-CHATWOOT_BOT_TOKEN = os.getenv("CHATWOOT_BOT_ACCESS_TOKEN", "nS7yBjTg66L29cSUVypLQnGB")
+CHATWOOT_API_URL = settings.chatwoot_api_url
+CHATWOOT_BOT_TOKEN = settings.chatwoot_bot_access_token or "nS7yBjTg66L29cSUVypLQnGB"
 
 
 def _headers_chatwoot() -> Dict[str, str]:

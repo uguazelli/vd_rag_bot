@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 import argparse
-import os
 import shutil
 from pathlib import Path
 
 from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
 
+from app.config import settings
 from .helpers import DEFAULT_STORAGE_DIR, PERSIST_DIR
 
-DOCUMENTS_DIR = Path(
-    os.getenv(
-        "RAG_SOURCE_DIR",
-        str(DEFAULT_STORAGE_DIR.resolve()),
-    )
+DOCUMENTS_DIR = settings.resolve_path(
+    settings.rag_source_dir, DEFAULT_STORAGE_DIR
 )
 
 

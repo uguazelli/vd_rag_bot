@@ -1,10 +1,9 @@
-import os
 from typing import Any, Dict, Optional
-
 import httpx
+from app.config import settings
 
-TWENTY_API_KEY = os.getenv("TWENTY_API_KEY")
-TWENTY_BASE_URL = os.getenv("TWENTY_BASE_URL", "http://localhost:8000")
+TWENTY_API_KEY = settings.twenty_api_key
+TWENTY_BASE_URL = settings.twenty_base_url
 
 
 def _headers() -> Dict[str, str]:
