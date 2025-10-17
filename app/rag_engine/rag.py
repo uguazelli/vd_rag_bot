@@ -1,8 +1,6 @@
 from typing import Any, Dict, Tuple
-
 from llama_index.core import Settings
 from llama_index.core.prompts import PromptTemplate
-
 from .helpers import get_query_engine
 
 _CLASSIFIER_PROMPT = (

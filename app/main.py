@@ -1,24 +1,19 @@
 from fastapi import FastAPI, Request
-# from app.menu import initial_state, handle_input
 from app.chatwoot.handleContactUpdated import handleContactCreated
 from app.chatwoot.handoff import perform_handoff, send_message
+from app.config import settings
 from app.rag_engine.rag import initial_state, handle_input
-import httpx, os
+import httpx
 
 app = FastAPI()
 SESSIONS = {}
 
 # Defaults are cheap/solid; override via env if you want
-CHATWOOT_BOT_ACCESS_TOKEN  = os.getenv("CHATWOOT_BOT_ACCESS_TOKEN")
-CHATWOOT_API_URL = os.getenv("CHATWOOT_API_URL", "http://localhost:3000/api/v1")
-
-HANDOFF_PUBLIC_REPLY = os.getenv(
-    "HANDOFF_PUBLIC_REPLY", "Ok, please hold on while I connect you with a human agent."
-)
-HANDOFF_PRIVATE_NOTE = os.getenv(
-    "HANDOFF_PRIVATE_NOTE", "Bot routed the conversation for human follow-up."
-)
-HANDOFF_PRIORITY = os.getenv("HANDOFF_PRIORITY", "high")
+CHATWOOT_BOT_ACCESS_TOKEN = settings.chatwoot_bot_access_token
+CHATWOOT_API_URL = settings.chatwoot_api_url
+HANDOFF_PUBLIC_REPLY = settings.handoff_public_reply
+HANDOFF_PRIVATE_NOTE = settings.handoff_private_note
+HANDOFF_PRIORITY = settings.handoff_priority
 
 @app.get("/health")
 async def health():
@@ -68,9 +63,9 @@ async def bot(request: Request):
     state, reply, status = handle_input(state, text)
     SESSIONS[user_id] = state
 
-    print("🤖 Bot reply:", reply)
-    print("🤖 Bot status:", status)
-    print("🤖 Bot state:", state)
+    # print("🤖 Bot reply:", reply)
+    # print("🤖 Bot status:", status)
+    # print("🤖 Bot state:", state)
 
 
     # Post reply once (Chatwoot will emit an 'outgoing' webhook; we ignore it above)
