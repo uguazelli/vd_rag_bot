@@ -33,6 +33,7 @@ async def bot(request: Request):
     convo = data.get("conversation", {}) or {}
     assignee_id = (convo.get("meta", {}) or {}).get("assignee", {}) or {}
     assignee_id = assignee_id.get("id")
+    print("🤖 Bot webhook:", data)
 
     if assignee_id:
         print("❌ Ignoring conversation assigned to someone.")

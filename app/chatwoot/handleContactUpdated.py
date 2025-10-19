@@ -2,10 +2,10 @@ import re
 from typing import Any, Dict, Optional
 import httpx
 from app.config import settings
-from app.twenty import upsert_contact
+from app.twenty.people import create_or_update_people
 
 CHATWOOT_API_URL = settings.chatwoot_api_url.rstrip("/")
-CHATWOOT_BOT_TOKEN = settings.chatwoot_bot_access_token
+CHATWOOT_BOT_TOKEN = settings.chatwoot_bot_access_token or "nS7yBjTg66L29cSUVypLQnGB"
 TIMEOUT = 10.0
 
 
@@ -50,7 +50,12 @@ def _extract_contact_payload(contact: Dict[str, Any]) -> Dict[str, Any]:
     return payload
 
 
-def _sync_crm_id(client: httpx.Client, account_id: Optional[int], contact_id: Optional[int], crm_id: Optional[str],) -> bool:
+def _sync_crm_id(
+    client: httpx.Client,
+    account_id: Optional[int],
+    contact_id: Optional[int],
+    crm_id: Optional[str],
+) -> bool:
     if not crm_id:
         print("⚠️ No crm_id computed; skipping Chatwoot update.")
         return False
@@ -60,8 +65,12 @@ def _sync_crm_id(client: httpx.Client, account_id: Optional[int], contact_id: Op
 
     url = f"{CHATWOOT_API_URL}/accounts/{account_id}/contacts/{contact_id}"
     try:
-        resp = client.put( url, headers=_headers_chatwoot(), json={"custom_attributes": {"crm_id": crm_id}}, timeout=TIMEOUT, )
-
+        resp = client.put(
+            url,
+            headers=_headers_chatwoot(),
+            json={"custom_attributes": {"crm_id": crm_id}},
+            timeout=TIMEOUT,
+        )
     except httpx.HTTPError as exc:
         print("❌ Chatwoot contact update error:", exc)
         return False
@@ -103,11 +112,22 @@ def handleContactCreated(data: Dict[str, Any]):
     )
 
     ids = _extract_ids(data, contact)
+    chatwoot_id = ids["contact_id"]
 
     with httpx.Client() as client:
-        crm_id = upsert_contact(client, payload, crm_id=existing_crm_id)
+        crm_id = create_or_update_people(
+            client,
+            chatwoot_id=str(chatwoot_id) if chatwoot_id is not None else None,
+            payload=payload,
+            crm_id=existing_crm_id,
+        )
         print("✅ Twenty CRM ID after upsert:", crm_id)
-        updated = _sync_crm_id( client, account_id=ids["account_id"], contact_id=ids["contact_id"], crm_id=crm_id, )
+        updated = _sync_crm_id(
+            client,
+            account_id=ids["account_id"],
+            contact_id=chatwoot_id,
+            crm_id=crm_id,
+        )
         if updated:
             contact.setdefault("custom_attributes", {})
             contact["custom_attributes"]["crm_id"] = crm_id
