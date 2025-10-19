@@ -1,4 +1,5 @@
-from typing import Dict, Optional
+from typing import Any, Dict
+import json
 import httpx
 from app.config import settings
 from app.twenty.people import create_or_update_people
@@ -8,99 +9,107 @@ CHATWOOT_BOT_TOKEN = settings.chatwoot_bot_access_token or ""
 TIMEOUT = 10.0
 
 
+def _ensure_dict(value: Any) -> Dict:
+    return value if isinstance(value, dict) else {}
+
+
+def _strip_nulls(value: Any) -> Any:
+    if isinstance(value, dict):
+        cleaned = {}
+        for key, val in value.items():
+            filtered = _strip_nulls(val)
+            if filtered not in (None, {}, []):
+                cleaned[key] = filtered
+        return cleaned
+    if isinstance(value, list):
+        cleaned_list = [_strip_nulls(item) for item in value]
+        return [item for item in cleaned_list if item not in (None, {}, [])]
+    return value
+
+
 def handleContactCreated(data: Dict):
-    print("🤖 Contact created:", data)
     event = data.get("event") or ""
+    payload = _ensure_dict(data.get("payload"))
+
+    contact: Dict[str, Any] = {}
+    contact_id = None
+    account_id = (data.get("account") or {}).get("id")
+
     if event.startswith("message_"):
-        return
+        conversation = _ensure_dict(data.get("conversation"))
+        contact_id = (conversation.get("contact_inbox") or {}).get("contact_id")
 
-    payload_wrapper = data.get("payload")
-    if isinstance(payload_wrapper, dict):
-        contact_candidate = payload_wrapper.get("contact")
-        contact = contact_candidate if isinstance(contact_candidate, dict) else payload_wrapper
+        messages = conversation.get("messages") or []
+        last_message = messages[-1] if messages else {}
+        sender = _ensure_dict(last_message.get("sender") or data.get("sender"))
+
+        if not contact_id:
+            contact_id = sender.get("id")
+
+        contact = sender
+    elif event.startswith("contact_") or not event:
+        contact = _ensure_dict(payload.get("contact") if "contact" in payload else payload or data)
+        contact_id = contact.get("id")
+        account_id = account_id or contact.get("account_id")
     else:
-        contact = data.get("contact")
-        if not isinstance(contact, dict):
-            contact = data
-    if not isinstance(contact, dict):
         return
 
-    def pick(value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        value = value.strip()
-        return value or None
-
-    additional = contact.get("additional_attributes") or {}
-    social = additional.get("social_profiles") or {}
-
-    payload: Dict[str, Dict] = {"createdBy": {"source": "API"}}
-
-    first_hint = pick(additional.get("first_name") or additional.get("firstname"))
-    last_hint = pick(additional.get("last_name") or additional.get("lastname"))
-
-    raw_name = pick(contact.get("name"))
-    name_tokens = raw_name.split() if raw_name else []
-
-    phone = pick(contact.get("phone_number"))
-    email = pick(contact.get("email"))
-
-    if first_hint or last_hint:
-        payload["name"] = {}
-        if first_hint:
-            payload["name"]["firstName"] = first_hint
-        if last_hint:
-            payload["name"]["lastName"] = last_hint
-    elif name_tokens:
-        payload["name"] = {"firstName": name_tokens[0]}
-        if len(name_tokens) > 1:
-            payload["name"]["lastName"] = " ".join(name_tokens[1:])
-    else:
-        fallback = phone or (email.split("@")[0] if email else None) or "Chatwoot Contact"
-        payload["name"] = {"firstName": fallback}
-
-    if email:
-        payload["emails"] = {"primaryEmail": email}
-
-    if phone:
-        payload["phones"] = {"primaryPhoneNumber": phone}
-
-    linkedin = pick(social.get("linkedin"))
-    if linkedin:
-        payload["linkedinLink"] = {"primaryLinkUrl": linkedin}
-
-    twitter = pick(social.get("twitter"))
-    if twitter:
-        payload["xLink"] = {"primaryLinkUrl": twitter}
-
-    city = pick(additional.get("city"))
-    if city:
-        payload["city"] = city
-
-    custom_attrs = contact.get("custom_attributes") or {}
-    existing_crm_id = pick(custom_attrs.get("crm_id") or contact.get("crm_id"))
-
-    account_id = contact.get("account_id") or (data.get("account") or {}).get("id")
-    contact_id = contact.get("id") or data.get("id")
-    if contact_id is None:
+    if not contact_id or not isinstance(contact, dict):
         return
+
+    additional = _ensure_dict(contact.get("additional_attributes"))
+    social = _ensure_dict(additional.get("social_profiles"))
+
+    payload_for_twenty = {
+        "createdBy": {"source": "API"},
+        "name": {
+            "firstName": additional.get("first_name")
+            or additional.get("firstname")
+            or contact.get("name"),
+            "lastName": additional.get("last_name") or additional.get("lastname"),
+        },
+        "emails": {"primaryEmail": contact.get("email")},
+        "phones": {"primaryPhoneNumber": contact.get("phone_number")},
+        "linkedinLink": {"primaryLinkUrl": social.get("linkedin")},
+        "xLink": {"primaryLinkUrl": social.get("twitter")},
+        "city": additional.get("city"),
+    }
+
+    payload_for_twenty = _strip_nulls(payload_for_twenty)
+    if "name" not in payload_for_twenty or "firstName" not in payload_for_twenty["name"]:
+        payload_for_twenty["name"] = {
+            "firstName": contact.get("name")
+            or contact.get("identifier")
+            or "Chatwoot Contact"
+        }
+
+    crm_id = (contact.get("custom_attributes") or {}).get("crm_id") or contact.get("crm_id")
 
     with httpx.Client() as client:
-        crm_id = create_or_update_people(
-            client,
+        print("➡️ Twenty upsert payload:", json.dumps(payload_for_twenty, ensure_ascii=False))
+        new_crm_id = create_or_update_people(
+            client=client,
             chatwoot_id=str(contact_id),
-            payload=payload,
-            crm_id=existing_crm_id,
+            payload=payload_for_twenty,
+            crm_id=crm_id,
         )
 
-        if not crm_id or not account_id:
+        if not new_crm_id or not account_id:
             return
 
+        print(
+            "↩️ Syncing CRM ID back to Chatwoot:",
+            {"account_id": account_id, "contact_id": contact_id, "crm_id": new_crm_id},
+        )
         client.put(
             f"{CHATWOOT_API_URL}/accounts/{account_id}/contacts/{contact_id}",
-            headers={"Content-Type": "application/json", "api_access_token": CHATWOOT_BOT_TOKEN},
-            json={"custom_attributes": {"crm_id": crm_id}},
+            headers={
+                "Content-Type": "application/json",
+                "api_access_token": CHATWOOT_BOT_TOKEN,
+            },
+            json={"custom_attributes": {"crm_id": new_crm_id}},
             timeout=TIMEOUT,
         )
+
         contact.setdefault("custom_attributes", {})
-        contact["custom_attributes"]["crm_id"] = crm_id
+        contact["custom_attributes"]["crm_id"] = new_crm_id
