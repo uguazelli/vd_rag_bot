@@ -93,13 +93,16 @@ def update_person(
 def create_or_update_people(
     client: httpx.Client,
     *,
-    chatwoot_id: Optional[str],
+    chatwoot_id: str,
     payload: Dict,
     crm_id: Optional[str] = None,
 ) -> Optional[str]:
+    if not chatwoot_id:
+        print("⚠️ Missing chatwoot_id; skipping Twenty sync.")
+        return crm_id
+
     body = dict(payload)
-    if chatwoot_id:
-        body["chatwootId"] = str(chatwoot_id)
+    body["chatwootId"] = str(chatwoot_id)
 
     person_id = crm_id
     if not person_id and chatwoot_id:

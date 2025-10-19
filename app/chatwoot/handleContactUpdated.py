@@ -9,7 +9,19 @@ TIMEOUT = 10.0
 
 
 def handleContactCreated(data: Dict):
-    contact = data.get("contact") or data
+    print("🤖 Contact created:", data)
+    event = data.get("event") or ""
+    if event.startswith("message_"):
+        return
+
+    payload_wrapper = data.get("payload")
+    if isinstance(payload_wrapper, dict):
+        contact_candidate = payload_wrapper.get("contact")
+        contact = contact_candidate if isinstance(contact_candidate, dict) else payload_wrapper
+    else:
+        contact = data.get("contact")
+        if not isinstance(contact, dict):
+            contact = data
     if not isinstance(contact, dict):
         return
 
@@ -24,17 +36,32 @@ def handleContactCreated(data: Dict):
 
     payload: Dict[str, Dict] = {"createdBy": {"source": "API"}}
 
-    name_tokens = (contact.get("name") or "").strip().split()
-    if name_tokens:
+    first_hint = pick(additional.get("first_name") or additional.get("firstname"))
+    last_hint = pick(additional.get("last_name") or additional.get("lastname"))
+
+    raw_name = pick(contact.get("name"))
+    name_tokens = raw_name.split() if raw_name else []
+
+    phone = pick(contact.get("phone_number"))
+    email = pick(contact.get("email"))
+
+    if first_hint or last_hint:
+        payload["name"] = {}
+        if first_hint:
+            payload["name"]["firstName"] = first_hint
+        if last_hint:
+            payload["name"]["lastName"] = last_hint
+    elif name_tokens:
         payload["name"] = {"firstName": name_tokens[0]}
         if len(name_tokens) > 1:
             payload["name"]["lastName"] = " ".join(name_tokens[1:])
+    else:
+        fallback = phone or (email.split("@")[0] if email else None) or "Chatwoot Contact"
+        payload["name"] = {"firstName": fallback}
 
-    email = pick(contact.get("email"))
     if email:
         payload["emails"] = {"primaryEmail": email}
 
-    phone = pick(contact.get("phone_number"))
     if phone:
         payload["phones"] = {"primaryPhoneNumber": phone}
 
@@ -55,16 +82,18 @@ def handleContactCreated(data: Dict):
 
     account_id = contact.get("account_id") or (data.get("account") or {}).get("id")
     contact_id = contact.get("id") or data.get("id")
+    if contact_id is None:
+        return
 
     with httpx.Client() as client:
         crm_id = create_or_update_people(
             client,
-            chatwoot_id=str(contact_id) if contact_id is not None else None,
+            chatwoot_id=str(contact_id),
             payload=payload,
             crm_id=existing_crm_id,
         )
 
-        if not crm_id or not account_id or contact_id is None:
+        if not crm_id or not account_id:
             return
 
         client.put(
