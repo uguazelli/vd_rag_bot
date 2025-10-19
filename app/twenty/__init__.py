@@ -1,5 +1,13 @@
 """Helpers for interacting with the Twenty CRM API."""
 
-from .client import upsert_contact
+from .people import (
+    create_or_update_people,
+    get_people_by_id,
+    get_people_chatwoot_id,
+)
 
-__all__ = ["upsert_contact"]
+__all__ = [
+    "create_or_update_people",
+    "get_people_by_id",
+    "get_people_chatwoot_id",
+]

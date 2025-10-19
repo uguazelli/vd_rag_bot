@@ -63,3 +63,7 @@ uv run --python 3.11 --env-file .env uvicorn app.main:app --host 0.0.0.0 --port 
    ```bash
    uv run --python 3.11 --env-file .env python -m app.rag_engine.ingest
    ```
+
+## Twenty configuration
+
+- Inside Twenty, create a `chatwoot_id` custom field on people so that the bot and CRM can keep records in sync.
