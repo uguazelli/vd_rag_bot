@@ -5,16 +5,7 @@ def _headers(access_token: str) -> dict[str, str]:
     return {"Content-Type": "application/json", "api_access_token": access_token}
 
 
-async def send_message(
-    *,
-    client: httpx.AsyncClient,
-    api_url: str,
-    access_token: str,
-    account_id: int,
-    conversation_id: int,
-    content: Optional[str],
-    private: bool,
-) -> None:
+async def send_message( *, client: httpx.AsyncClient, api_url: str, access_token: str, account_id: int, conversation_id: int, content: Optional[str], private: bool,) -> None:
     if not content:
         return
     try:
@@ -33,17 +24,7 @@ async def send_message(
         print("❌ HTTP error posting message:", exc)
 
 
-async def perform_handoff(
-    *,
-    client: httpx.AsyncClient,
-    account_id: int,
-    conversation_id: int,
-    api_url: str,
-    access_token: str,
-    public_reply: Optional[str],
-    private_note: Optional[str],
-    priority: Optional[str],
-) -> None:
+async def perform_handoff( *, client: httpx.AsyncClient, account_id: int, conversation_id: int, api_url: str, access_token: str, public_reply: Optional[str], private_note: Optional[str], priority: Optional[str],) -> None:
     print(f"📡 Sending public reply and private note ")
     await send_message(
         client=client,
