@@ -14,18 +14,64 @@ CHATWOOT_API_URL = settings.chatwoot_api_url
 HANDOFF_PUBLIC_REPLY = settings.handoff_public_reply
 HANDOFF_PRIVATE_NOTE = settings.handoff_private_note
 HANDOFF_PRIORITY = settings.handoff_priority
+HTTP_TIMEOUT = 10.0
 
 @app.get("/health")
 async def health():
     print("🤖 Health check", flush=True)
     return {"status": "True"}
 
-@app.post("/webhook")
+@app.post("/chatwoot/webhook")
 async def webhook(request: Request):
     data = await request.json()
     # print("🤖 Webhook:", data)
     handleContactCreated(data)
     return {"status": "ok"}
+
+
+@app.post("/twenty/webhook")
+async def twenty_webhook(request: Request):
+    payload = await request.json()
+    print("🔄 Twenty webhook payload received:", payload)
+
+    record = payload.get("record") or {}
+    chatwoot_id = record.get("chatwootId")
+    if not chatwoot_id:
+        return {"status": "ignored"}
+
+    name = record.get("name") or {}
+    full_name = f"{name.get('firstName', '')} {name.get('lastName', '')}".strip()
+    phone_info = record.get("phones") or {}
+    phone = phone_info.get("primaryPhoneNumber")
+    calling_code = phone_info.get("primaryPhoneCallingCode") or ""
+    if phone:
+        formatted = f"{calling_code}{phone}".replace(" ", "")
+        phone = formatted if formatted.startswith("+") else f"+{formatted.lstrip('+')}"
+    email = (record.get("emails") or {}).get("primaryEmail")
+
+    updates = {
+        "name": full_name or None,
+        "email": email,
+        "phone_number": phone,
+        "custom_attributes": {
+            "twenty_id": record.get("id"),
+            "company_id": record.get("companyId"),
+        },
+    }
+
+    async with httpx.AsyncClient() as client:
+        result = await client.put(
+            f"{CHATWOOT_API_URL}/accounts/1/contacts/{chatwoot_id}",
+            headers={
+                "Content-Type": "application/json",
+                "api_access_token": CHATWOOT_BOT_ACCESS_TOKEN,
+            },
+            json=updates,
+            timeout=HTTP_TIMEOUT,
+        )
+        print("🔄 Twenty webhook response:", result.status_code, result.text)
+
+    return {"status": "updated"}
 
 @app.post("/bot")
 async def bot(request: Request):
