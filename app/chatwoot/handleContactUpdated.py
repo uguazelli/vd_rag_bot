@@ -1,12 +1,7 @@
 from typing import Any, Dict
 import json
 import httpx
-from app.config import settings
 from app.twenty.people import create_or_update_people
-
-CHATWOOT_API_URL = settings.chatwoot_api_url.rstrip("/")
-CHATWOOT_BOT_TOKEN = settings.chatwoot_bot_access_token
-TIMEOUT = 10.0
 
 
 def _ensure_dict(value: Any) -> Dict:
@@ -94,33 +89,18 @@ def handleContactCreated(data: Dict):
             or "Chatwoot Contact"
         }
 
-    crm_id = (contact.get("custom_attributes") or {}).get("crm_id") or contact.get("crm_id")
-
     with httpx.Client() as client:
         print("➡️ Twenty upsert payload:", json.dumps(payload_for_twenty, ensure_ascii=False))
         new_crm_id = create_or_update_people(
             client=client,
             chatwoot_id=str(contact_id),
             payload=payload_for_twenty,
-            crm_id=crm_id,
         )
 
         if not new_crm_id or not account_id:
             return
 
         print(
-            "↩️ Syncing CRM ID back to Chatwoot:",
-            {"account_id": account_id, "contact_id": contact_id, "crm_id": new_crm_id},
+            "✅ Synced contact to Twenty:",
+            {"account_id": account_id, "contact_id": contact_id, "twenty_id": new_crm_id},
         )
-        client.put(
-            f"{CHATWOOT_API_URL}/accounts/{account_id}/contacts/{contact_id}",
-            headers={
-                "Content-Type": "application/json",
-                "api_access_token": CHATWOOT_BOT_TOKEN,
-            },
-            json={"custom_attributes": {"crm_id": new_crm_id}},
-            timeout=TIMEOUT,
-        )
-
-        contact.setdefault("custom_attributes", {})
-        contact["custom_attributes"]["crm_id"] = new_crm_id

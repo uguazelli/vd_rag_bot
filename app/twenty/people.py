@@ -95,20 +95,16 @@ def create_or_update_people(
     *,
     chatwoot_id: str,
     payload: Dict,
-    crm_id: Optional[str] = None,
 ) -> Optional[str]:
     if not chatwoot_id:
         print("⚠️ Missing chatwoot_id; skipping Twenty sync.")
-        return crm_id
+        return None
 
     body = dict(payload)
     body["chatwootId"] = str(chatwoot_id)
 
-    person_id = crm_id
-    if not person_id and chatwoot_id:
-        existing = get_people_chatwoot_id(client, chatwoot_id)
-        if existing:
-            person_id = existing.get("id")
+    existing = get_people_chatwoot_id(client, chatwoot_id)
+    person_id = existing.get("id") if existing else None
 
     if person_id:
         return update_person(client, str(person_id), body) or person_id
