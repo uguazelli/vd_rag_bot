@@ -5,7 +5,7 @@ from app.config import settings
 from app.twenty.people import create_or_update_people
 
 CHATWOOT_API_URL = settings.chatwoot_api_url.rstrip("/")
-CHATWOOT_BOT_TOKEN = settings.chatwoot_bot_access_token or ""
+CHATWOOT_BOT_TOKEN = settings.chatwoot_bot_access_token
 TIMEOUT = 10.0
 
 
@@ -60,13 +60,24 @@ def handleContactCreated(data: Dict):
     additional = _ensure_dict(contact.get("additional_attributes"))
     social = _ensure_dict(additional.get("social_profiles"))
 
+    raw_full_name = contact.get("name") or ""
+    parts = [p for p in raw_full_name.strip().split() if p]
+    if len(parts) > 1:
+        first_name = " ".join(parts[:-1])
+        last_name = parts[-1]
+    elif len(parts) == 1:
+        first_name = parts[0]
+        last_name = ""
+    else:
+        identifier = contact.get("identifier") or "Chatwoot Contact"
+        first_name = identifier
+        last_name = ""
+
     payload_for_twenty = {
         "createdBy": {"source": "API"},
         "name": {
-            "firstName": additional.get("first_name")
-            or additional.get("firstname")
-            or contact.get("name"),
-            "lastName": additional.get("last_name") or additional.get("lastname"),
+            "firstName": first_name,
+            "lastName": last_name,
         },
         "emails": {"primaryEmail": contact.get("email")},
         "phones": {"primaryPhoneNumber": contact.get("phone_number")},
