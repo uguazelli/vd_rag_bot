@@ -29,9 +29,7 @@ def get_people_by_id(client: httpx.Client, person_id: str, *, depth: int = 1) ->
     return data.get("person")
 
 
-def get_people_chatwoot_id(
-    client: httpx.Client, chatwoot_id: str
-) -> Optional[Dict]:
+def get_people_chatwoot_id( client: httpx.Client, chatwoot_id: str) -> Optional[Dict]:
     try:
         resp = client.get(
             f"{BASE_URL}/rest/people",
@@ -90,12 +88,7 @@ def update_person(
     return record.get("id") or person_id
 
 
-def create_or_update_people(
-    client: httpx.Client,
-    *,
-    chatwoot_id: str,
-    payload: Dict,
-) -> Optional[str]:
+def create_or_update_people( client: httpx.Client, *, chatwoot_id: str, payload: Dict,) -> Optional[str]:
     if not chatwoot_id:
         print("⚠️ Missing chatwoot_id; skipping Twenty sync.")
         return None
