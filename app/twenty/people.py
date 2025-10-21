@@ -88,17 +88,6 @@ def _make_filter(email: Optional[str], raw_phone: Optional[str]) -> str:
     return parts[0] if len(parts) == 1 else f'or({",".join(parts)})'
 
 
-# def _make_filter(email: Optional[str], phone: Optional[str]) -> str:
-#     parts = []
-#     if email:
-#         parts.append(f'emails.primaryEmail[eq]:"{email}"')
-#     if phone:
-#         parts.append(f'phones.primaryPhoneNumber[eq]:"{phone}"')
-#     if not parts:
-#         raise ValueError("At least one of email or phone must be provided")
-#     return parts[0] if len(parts) == 1 else f'or({",".join(parts)})'
-
-
 def get_people_by_email_or_phone(
     *,
     base_url: str,
