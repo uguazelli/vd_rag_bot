@@ -56,7 +56,7 @@ def update_contact(
         "contact_id": contact_id,
         "twenty_person_id": twenty_person_id,
     }
-
+    print("📡 Updating contact:", params)
     with get_connection() as conn, conn.cursor() as cur:
         cur.execute(SQL_UPDATE_CONTACT_FULL, params)
         return cur.rowcount > 0

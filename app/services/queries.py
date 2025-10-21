@@ -29,6 +29,7 @@ SET
   x_url = %(x_url)s,
   company_id = %(company_id)s,
   chatwoot_contact_id = %(chatwoot_contact_id)s,
+  twenty_person_id = %(twenty_person_id)s,
   updated_at = NOW()
 WHERE id = %(contact_id)s
 """

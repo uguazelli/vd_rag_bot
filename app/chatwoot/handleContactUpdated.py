@@ -42,52 +42,6 @@ def handleContact(data: Dict[str, Any]) -> None:
         fallback=(data.get("identifier") or "Chatwoot Contact"),
     )
 
-    # 4) Local lookup
-    contact = get_contact_by_phone_or_email(
-        phone=data.get("phone_number"),
-        email=data.get("email"),
-    )
-    # print("🤖 VD contact:", contact)
-
-    local_contact_id: Optional[int] = None
-
-    if contact:
-        local_contact_id = contact["id"]
-        # Update local contact
-        update_contact(
-            contact_id=local_contact_id,
-            first_name=first_name,
-            last_name=last_name,
-            email=data.get("email"),
-            phone=data.get("phone_number"),
-            city=addl.get("city"),
-            linkedin_url=addl.get("linkedin_url"),
-            facebook_url=addl.get("facebook_url"),
-            instagram_url=addl.get("instagram_url"),
-            github_url=addl.get("github_url"),
-            x_url=addl.get("x_url"),
-            company_id=cust.get("company_id"),
-            chatwoot_contact_id=data.get("id"),
-            twenty_person_id=cust.get("twenty_id"),
-        )
-    else:
-        # Create local contact (capture ID!)
-        local_contact_id = create_contact(
-            tenant_id=tenant["id"],
-            first_name=first_name,
-            last_name=last_name,
-            email=data.get("email"),
-            phone=data.get("phone_number"),
-            city=addl.get("city"),
-            linkedin_url=addl.get("linkedin_url"),
-            facebook_url=addl.get("facebook_url"),
-            instagram_url=addl.get("instagram_url"),
-            github_url=addl.get("github_url"),
-            x_url=addl.get("x_url"),
-            company_id=cust.get("company_id"),
-            chatwoot_contact_id=data.get("id"),
-            twenty_person_id=cust.get("twenty_id"),
-        )
 
     # 5) Look up in Twenty by email/phone
     result = get_people_by_email_or_phone(
@@ -99,10 +53,12 @@ def handleContact(data: Dict[str, Any]) -> None:
     if not result:
         return
 
-    print("🤖 VD Twenty people:", result)
+    # print("🤖 VD Twenty people:", result)
     total = result.get("totalCount", 0) or 0
+    person_id = result.get("data").get("people")[0].get("id")
+
+    # 6a) Create in Twenty, then link back locally
     if total == 0:
-        # 6a) Create in Twenty, then link back locally
         # print("🤖 Creating a new person in Twenty")
         created = create_people(
             base_url=tenant.get("twenty_base_url"),
@@ -140,24 +96,70 @@ def handleContact(data: Dict[str, Any]) -> None:
                 company_id=cust.get("company_id"),
                 chatwoot_contact_id=data.get("id"),
             )
-        return
 
     # 6b) Update in Twenty (matched)
-    person_id = result.get("data").get("people")[0].get("id")
-    if not person_id:
-        # Fallback: nothing to update
-        print("⚠️ Twenty search returned results but no person id could be extracted.")
-        return
+    if total > 0:
 
-    # print("🤖 Updating an existing person in Twenty:", person_id)
-    update_people(
-        base_url=tenant.get("twenty_base_url"),
-        token=tenant.get("twenty_api_key"),
-        person_id=person_id,
-        first_name=first_name,
-        last_name=last_name,
+        if not person_id:
+            # Fallback: nothing to update
+            print("⚠️ Twenty search returned results but no person id could be extracted.")
+            return
+
+        # print("🤖 Updating an existing person in Twenty:", person_id)
+        update_people(
+            base_url=tenant.get("twenty_base_url"),
+            token=tenant.get("twenty_api_key"),
+            person_id=person_id,
+            first_name=first_name,
+            last_name=last_name,
+            email=data.get("email"),
+            raw_phone=data.get("phone_number"),
+            city=addl.get("city"),
+            company_id=cust.get("company_id"),
+        )
+
+
+    # 4) Local lookup
+    contact = get_contact_by_phone_or_email(
+        phone=data.get("phone_number"),
         email=data.get("email"),
-        raw_phone=data.get("phone_number"),
-        city=addl.get("city"),
-        company_id=cust.get("company_id"),
     )
+
+    local_contact_id: Optional[int] = None
+    if contact:
+        local_contact_id = contact["id"]
+        # Update local contact
+        update_contact(
+            contact_id=local_contact_id,
+            first_name=first_name,
+            last_name=last_name,
+            email=data.get("email"),
+            phone=data.get("phone_number"),
+            city=addl.get("city"),
+            linkedin_url=addl.get("linkedin_url"),
+            facebook_url=addl.get("facebook_url"),
+            instagram_url=addl.get("instagram_url"),
+            github_url=addl.get("github_url"),
+            x_url=addl.get("x_url"),
+            company_id=cust.get("company_id"),
+            chatwoot_contact_id=data.get("id"),
+            twenty_person_id=person_id,
+        )
+    else:
+        # Create local contact (capture ID!)
+        local_contact_id = create_contact(
+            tenant_id=tenant["id"],
+            first_name=first_name,
+            last_name=last_name,
+            email=data.get("email"),
+            phone=data.get("phone_number"),
+            city=addl.get("city"),
+            linkedin_url=addl.get("linkedin_url"),
+            facebook_url=addl.get("facebook_url"),
+            instagram_url=addl.get("instagram_url"),
+            github_url=addl.get("github_url"),
+            x_url=addl.get("x_url"),
+            company_id=cust.get("company_id"),
+            chatwoot_contact_id=data.get("id"),
+            twenty_person_id=person_id,
+        )
