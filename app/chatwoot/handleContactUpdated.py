@@ -1,106 +1,163 @@
-from typing import Any, Dict
-import json
-import httpx
-from app.twenty.people import create_or_update_people
+from __future__ import annotations
+from typing import Any, Dict, Optional
+
+from app.services.repo import (
+    create_contact,
+    get_contact_by_phone_or_email,
+    get_tenant_by_chatwoot_account,
+    update_contact,
+)
+from app.twenty.people import create_people, get_people_by_email_or_phone, update_people
 
 
-def _ensure_dict(value: Any) -> Dict:
-    return value if isinstance(value, dict) else {}
+def _split_name(raw: Optional[str], fallback: str = "Chatwoot Contact") -> tuple[str, str]:
+    s = (raw or "").strip()
+    if not s:
+        return fallback, ""
+    parts = [p for p in s.split() if p]
+    if len(parts) == 1:
+        return parts[0], ""
+    return " ".join(parts[:-1]), parts[-1]
 
 
-def _strip_nulls(value: Any) -> Any:
-    if isinstance(value, dict):
-        cleaned = {}
-        for key, val in value.items():
-            filtered = _strip_nulls(val)
-            if filtered not in (None, {}, []):
-                cleaned[key] = filtered
-        return cleaned
-    if isinstance(value, list):
-        cleaned_list = [_strip_nulls(item) for item in value]
-        return [item for item in cleaned_list if item not in (None, {}, [])]
-    return value
-
-
-def handleContactCreated(data: Dict):
+def handleContact(data: Dict[str, Any]) -> None:
+    # 0) Ignore non-contact events
     event = data.get("event") or ""
-    payload = _ensure_dict(data.get("payload"))
-
-    contact: Dict[str, Any] = {}
-    contact_id = None
-    account_id = (data.get("account") or {}).get("id")
-
-    if event.startswith("message_"):
-        conversation = _ensure_dict(data.get("conversation"))
-        contact_id = (conversation.get("contact_inbox") or {}).get("contact_id")
-
-        messages = conversation.get("messages") or []
-        last_message = messages[-1] if messages else {}
-        sender = _ensure_dict(last_message.get("sender") or data.get("sender"))
-
-        if not contact_id:
-            contact_id = sender.get("id")
-
-        contact = sender
-    elif event.startswith("contact_") or not event:
-        contact = _ensure_dict(payload.get("contact") if "contact" in payload else payload or data)
-        contact_id = contact.get("id")
-        account_id = account_id or contact.get("account_id")
-    else:
+    if not event.startswith("contact_"):
         return
 
-    if not contact_id or not isinstance(contact, dict):
+    # 1) Tenant / credentials
+    account = data.get("account") or {}
+    tenant = get_tenant_by_chatwoot_account(account.get("id"))
+    if not tenant:
         return
 
-    additional = _ensure_dict(contact.get("additional_attributes"))
-    social = _ensure_dict(additional.get("social_profiles"))
+    # 2) Safe nested dicts
+    addl = data.get("additional_attributes") or {}
+    cust = data.get("custom_attributes") or {}
 
-    raw_full_name = contact.get("name") or ""
-    parts = [p for p in raw_full_name.strip().split() if p]
-    if len(parts) > 1:
-        first_name = " ".join(parts[:-1])
-        last_name = parts[-1]
-    elif len(parts) == 1:
-        first_name = parts[0]
-        last_name = ""
+    # 3) Compute names once
+    first_name, last_name = _split_name(
+        data.get("name"),
+        fallback=(data.get("identifier") or "Chatwoot Contact"),
+    )
+
+    # 4) Local lookup
+    contact = get_contact_by_phone_or_email(
+        phone=data.get("phone_number"),
+        email=data.get("email"),
+    )
+    # print("🤖 VD contact:", contact)
+
+    local_contact_id: Optional[int] = None
+
+    if contact:
+        local_contact_id = contact["id"]
+        # Update local contact
+        update_contact(
+            contact_id=local_contact_id,
+            first_name=first_name,
+            last_name=last_name,
+            email=data.get("email"),
+            phone=data.get("phone_number"),
+            city=addl.get("city"),
+            linkedin_url=addl.get("linkedin_url"),
+            facebook_url=addl.get("facebook_url"),
+            instagram_url=addl.get("instagram_url"),
+            github_url=addl.get("github_url"),
+            x_url=addl.get("x_url"),
+            company_id=cust.get("company_id"),
+            chatwoot_contact_id=data.get("id"),
+            twenty_person_id=cust.get("twenty_id"),
+        )
     else:
-        identifier = contact.get("identifier") or "Chatwoot Contact"
-        first_name = identifier
-        last_name = ""
-
-    payload_for_twenty = {
-        "createdBy": {"source": "API"},
-        "name": {
-            "firstName": first_name,
-            "lastName": last_name,
-        },
-        "emails": {"primaryEmail": contact.get("email")},
-        "phones": {"primaryPhoneNumber": contact.get("phone_number")},
-        "linkedinLink": {"primaryLinkUrl": social.get("linkedin")},
-        "xLink": {"primaryLinkUrl": social.get("twitter")},
-        "city": additional.get("city"),
-    }
-
-    payload_for_twenty = _strip_nulls(payload_for_twenty)
-    if "name" not in payload_for_twenty or "firstName" not in payload_for_twenty["name"]:
-        payload_for_twenty["name"] = {
-            "firstName": contact.get("name")
-            or contact.get("identifier")
-            or "Chatwoot Contact"
-        }
-
-    with httpx.Client() as client:
-        print("➡️ Twenty upsert payload:", json.dumps(payload_for_twenty, ensure_ascii=False))
-        new_crm_id = create_or_update_people(
-            client=client,
-            chatwoot_id=str(contact_id),
-            payload=payload_for_twenty,
+        # Create local contact (capture ID!)
+        local_contact_id = create_contact(
+            tenant_id=tenant["id"],
+            first_name=first_name,
+            last_name=last_name,
+            email=data.get("email"),
+            phone=data.get("phone_number"),
+            city=addl.get("city"),
+            linkedin_url=addl.get("linkedin_url"),
+            facebook_url=addl.get("facebook_url"),
+            instagram_url=addl.get("instagram_url"),
+            github_url=addl.get("github_url"),
+            x_url=addl.get("x_url"),
+            company_id=cust.get("company_id"),
+            chatwoot_contact_id=data.get("id"),
+            twenty_person_id=cust.get("twenty_id"),
         )
 
-        if not new_crm_id or not account_id:
-            return
+    # 5) Look up in Twenty by email/phone
+    result = get_people_by_email_or_phone(
+        base_url=tenant.get("twenty_base_url"),
+        email=data.get("email"),
+        raw_phone=data.get("phone_number"),
+        token=tenant.get("twenty_api_key"),
+    )
+    if not result:
+        return
 
-        print(
-            "✅ Synced contact to Twenty:",
-            {"account_id": account_id, "contact_id": contact_id, "twenty_id": new_crm_id},
+    print("🤖 VD Twenty people:", result)
+    total = result.get("totalCount", 0) or 0
+    if total == 0:
+        # 6a) Create in Twenty, then link back locally
+        # print("🤖 Creating a new person in Twenty")
+        created = create_people(
+            base_url=tenant.get("twenty_base_url"),
+            token=tenant.get("twenty_api_key"),
+            first_name=first_name,
+            last_name=last_name,
+            email=data.get("email"),
+            raw_phone=data.get("phone_number"),
+            city=addl.get("city"),
+            company_id=cust.get("company_id"),
         )
+        # Robustly extract the new Twenty ID
+        new_pid = None
+        if isinstance(created, dict):
+            # common REST shape: {"data": {"createPerson": {"id": "...", ...}}}
+            data_block = created.get("data") or {}
+            maybe_create = data_block.get("createPerson") or data_block.get("person") or {}
+            new_pid = maybe_create.get("id") or created.get("id")
+
+        if new_pid and local_contact_id is not None:
+            # Link back to local
+            update_contact(
+                contact_id=local_contact_id,
+                twenty_person_id=new_pid,
+                first_name=first_name,
+                last_name=last_name,
+                email=data.get("email"),
+                phone=data.get("phone_number"),
+                city=addl.get("city"),
+                linkedin_url=addl.get("linkedin_url"),
+                facebook_url=addl.get("facebook_url"),
+                instagram_url=addl.get("instagram_url"),
+                github_url=addl.get("github_url"),
+                x_url=addl.get("x_url"),
+                company_id=cust.get("company_id"),
+                chatwoot_contact_id=data.get("id"),
+            )
+        return
+
+    # 6b) Update in Twenty (matched)
+    person_id = result.get("data").get("people")[0].get("id")
+    if not person_id:
+        # Fallback: nothing to update
+        print("⚠️ Twenty search returned results but no person id could be extracted.")
+        return
+
+    # print("🤖 Updating an existing person in Twenty:", person_id)
+    update_people(
+        base_url=tenant.get("twenty_base_url"),
+        token=tenant.get("twenty_api_key"),
+        person_id=person_id,
+        first_name=first_name,
+        last_name=last_name,
+        email=data.get("email"),
+        raw_phone=data.get("phone_number"),
+        city=addl.get("city"),
+        company_id=cust.get("company_id"),
+    )

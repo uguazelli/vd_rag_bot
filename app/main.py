@@ -1,10 +1,13 @@
 from fastapi import FastAPI, Request
-from app.chatwoot.handleContactUpdated import handleContactCreated
+from app.chatwoot.handleContactUpdated import handleContact
 from app.chatwoot.handoff import perform_handoff, send_message
 from app.config import settings
 from app.rag_engine.rag import initial_state, handle_input
+from app.db import init_db
+
 import httpx
 
+init_db()
 app = FastAPI()
 SESSIONS = {}
 
@@ -23,9 +26,8 @@ async def health():
 
 @app.post("/chatwoot/webhook")
 async def webhook(request: Request):
-    data = await request.json()
-    # print("🤖 Webhook:", data)
-    handleContactCreated(data)
+    payload = await request.json()
+    handleContact(payload)
     return {"status": "ok"}
 
 
@@ -33,45 +35,8 @@ async def webhook(request: Request):
 async def twenty_webhook(request: Request):
     payload = await request.json()
     print("🔄 Twenty webhook payload received:", payload)
+    return {"status": "ok"}
 
-    record = payload.get("record") or {}
-    chatwoot_id = record.get("chatwootId")
-    if not chatwoot_id:
-        return {"status": "ignored"}
-
-    name = record.get("name") or {}
-    full_name = f"{name.get('firstName', '')} {name.get('lastName', '')}".strip()
-    phone_info = record.get("phones") or {}
-    phone = phone_info.get("primaryPhoneNumber")
-    calling_code = phone_info.get("primaryPhoneCallingCode") or ""
-    if phone:
-        formatted = f"{calling_code}{phone}".replace(" ", "")
-        phone = formatted if formatted.startswith("+") else f"+{formatted.lstrip('+')}"
-    email = (record.get("emails") or {}).get("primaryEmail")
-
-    updates = {
-        "name": full_name or None,
-        "email": email,
-        "phone_number": phone,
-        "custom_attributes": {
-            "twenty_id": record.get("id"),
-            "company_id": record.get("companyId"),
-        },
-    }
-
-    async with httpx.AsyncClient() as client:
-        result = await client.put(
-            f"{CHATWOOT_API_URL}/accounts/1/contacts/{chatwoot_id}",
-            headers={
-                "Content-Type": "application/json",
-                "api_access_token": CHATWOOT_BOT_ACCESS_TOKEN,
-            },
-            json=updates,
-            timeout=HTTP_TIMEOUT,
-        )
-        print("🔄 Twenty webhook response:", result.status_code, result.text)
-
-    return {"status": "updated"}
 
 @app.post("/bot")
 async def bot(request: Request):

@@ -11,8 +11,28 @@ FastAPI service that powers retrieval-augmented replies inside Chatwoot conversa
 2. Update `.env` with:
    - `OPENAI_API_KEY` and preferred model names for answers and search queries.
    - `CHATWOOT_BOT_ACCESS_TOKEN` and `CHATWOOT_API_URL` so the bot can post messages back to Chatwoot.
-   - `TWENTY_BASE_URL` and `TWENTY_API_KEY` if you want contact syncing with Twenty.
+   - `TWENTY_BASE_URL` and `TWENTY_API_KEY` if you want contact syncing with Twenty. (The workspace id is read from the database; no env var needed.)
    - Database credentials if you override the defaults supplied in `docker-compose.yml`.
+3. When the FastAPI app starts it automatically executes `init_db()` (see `app/main.py`), which issues `CREATE TABLE IF NOT EXISTS` statements. No extra migration command is required, but ensure the database referenced by `DATABASE_URL` is reachable before booting the app. Both `postgresql://` and `postgresql+psycopg://` style URLs are accepted.
+
+4. Seed the `tenants` table with at least one row so webhooks can be routed to the right credentials. For example:
+
+   ```sql
+   INSERT INTO public.tenants(
+   name, chatwoot_account_id, chatwoot_api_url, chatwoot_bot_token, twenty_workspace_id, twenty_api_key, twenty_base_url)
+   VALUES ('Veri Data',
+   1,
+   'http://host.docker.internal:3000/api/v1',
+   'zdJTabnYrPQKRK8s7cwVYLso',
+   'aec1a00b-ab4d-4109-85b2-f8bd0718401e',
+   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjZTA1MDVjOS1jZWI2LTQ2ZTQtYjk4Ni0xOTRhY2Q3OTU4ODYiLCJ0eXBlIjoiQVBJX0tFWSIsIndvcmtzcGFjZUlkIjoiY2UwNTA1YzktY2ViNi00NmU0LWI5ODYtMTk0YWNkNzk1ODg2IiwiaWF0IjoxNzYwMDQ3NzMxLCJleHAiOjQ5MTM2NDc3MzAsImp0aSI6IjhmNjJiZDc4LTY2OWMtNGE5Yi04Njk2LTE2OWIxMzA1MzUzNyJ9.tyc2KW7a10pCopjy_QaH8m5tOnXqeHLb7OGzWHNM66A',
+   'http://host.docker.internal:8000' );
+
+   ```
+
+   Add one row per customer/tenant with their Chatwoot and Twenty credentials.
+
+If you had an earlier database without the newer columns, add them manually:
 
 ## Running with Docker
 
@@ -39,6 +59,13 @@ The API will be available on http://localhost:8080. Containers include the FastA
   docker compose exec db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
   ```
 - Data is stored in the `pgdata` volume; remove the volume to reset state.
+
+### Optional pgAdmin
+
+The main compose file also ships with a pgAdmin service. After `docker compose up`, navigate to http://localhost:5050 and log in with `admin@example.com` / `admin` (override via `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD`).
+
+- When registering the bundled Postgres server inside pgAdmin, use `db` as the host name, port `5432`, username/password `vd_bot` (or whatever you set in `.env`).
+- To connect from pgAdmin to the database exposed to the host, use `localhost` and port `55432`.
 
 ## Local (non-Docker) commands
 
