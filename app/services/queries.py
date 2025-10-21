@@ -1,9 +1,3 @@
-# Tenants
-SQL_GET_TENANT_BY_CHATWOOT = """
-SELECT *
-FROM tenants
-WHERE chatwoot_account_id = %(account_id)s
-"""
 
 # Contacts – lookups
 SQL_GET_CONTACT_BY_PHONE_OR_EMAIL = """
