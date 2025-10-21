@@ -1,14 +1,16 @@
 from __future__ import annotations
+import os
 from typing import Any, Dict, Optional
 
 from app.services.repo import (
     create_contact,
     get_contact_by_phone_or_email,
-    get_tenant_by_chatwoot_account,
     update_contact,
 )
 from app.twenty.people import create_people, get_people_by_email_or_phone, update_people
 
+TWENTY_BASE_URL = os.getenv("TWENTY_BASE_URL")
+TWENTY_API_KEY= os.getenv("TWENTY_API_KEY")
 
 def _split_name(raw: Optional[str], fallback: str = "Chatwoot Contact") -> tuple[str, str]:
     s = (raw or "").strip()
@@ -26,11 +28,8 @@ def handleContact(data: Dict[str, Any]) -> None:
     if not event.startswith("contact_"):
         return
 
-    # 1) Tenant / credentials
     account = data.get("account") or {}
-    tenant = get_tenant_by_chatwoot_account(account.get("id"))
-    if not tenant:
-        return
+
 
     # 2) Safe nested dicts
     addl = data.get("additional_attributes") or {}
@@ -45,10 +44,10 @@ def handleContact(data: Dict[str, Any]) -> None:
 
     # 5) Look up in Twenty by email/phone
     result = get_people_by_email_or_phone(
-        base_url=tenant.get("twenty_base_url"),
+        base_url=TWENTY_BASE_URL,
         email=data.get("email"),
         raw_phone=data.get("phone_number"),
-        token=tenant.get("twenty_api_key"),
+        token=TWENTY_API_KEY,
     )
     if not result:
         return
@@ -61,8 +60,8 @@ def handleContact(data: Dict[str, Any]) -> None:
     if total == 0:
         # print("🤖 Creating a new person in Twenty")
         created = create_people(
-            base_url=tenant.get("twenty_base_url"),
-            token=tenant.get("twenty_api_key"),
+            base_url=TWENTY_BASE_URL,
+            token=TWENTY_API_KEY,
             first_name=first_name,
             last_name=last_name,
             email=data.get("email"),
@@ -107,8 +106,8 @@ def handleContact(data: Dict[str, Any]) -> None:
 
         # print("🤖 Updating an existing person in Twenty:", person_id)
         update_people(
-            base_url=tenant.get("twenty_base_url"),
-            token=tenant.get("twenty_api_key"),
+            base_url=TWENTY_BASE_URL,
+            token=TWENTY_API_KEY,
             person_id=person_id,
             first_name=first_name,
             last_name=last_name,
@@ -148,7 +147,7 @@ def handleContact(data: Dict[str, Any]) -> None:
     else:
         # Create local contact (capture ID!)
         local_contact_id = create_contact(
-            tenant_id=tenant["id"],
+            tenant_id="",
             first_name=first_name,
             last_name=last_name,
             email=data.get("email"),

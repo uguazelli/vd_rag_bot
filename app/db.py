@@ -5,7 +5,7 @@ from contextlib import contextmanager
 import psycopg
 
 # Use localhost if running from your Mac; use "db" if running inside the compose network.
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 def _normalize_conninfo(url: str) -> str:
     """Strip async/driver prefixes like postgresql+psycopg:// to plain postgresql://."""

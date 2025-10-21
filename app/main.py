@@ -1,10 +1,9 @@
 from fastapi import FastAPI, Request
 from app.chatwoot.handleContactUpdated import handleContact
 from app.chatwoot.handoff import perform_handoff, send_message
-from app.config import settings
 from app.rag_engine.rag import initial_state, handle_input
 from app.db import init_db
-
+import os
 import httpx
 
 init_db()
@@ -12,11 +11,11 @@ app = FastAPI()
 SESSIONS = {}
 
 # Defaults are cheap/solid; override via env if you want
-CHATWOOT_BOT_ACCESS_TOKEN = settings.chatwoot_bot_access_token
-CHATWOOT_API_URL = settings.chatwoot_api_url
-HANDOFF_PUBLIC_REPLY = settings.handoff_public_reply
-HANDOFF_PRIVATE_NOTE = settings.handoff_private_note
-HANDOFF_PRIORITY = settings.handoff_priority
+CHATWOOT_BOT_ACCESS_TOKEN = os.getenv("CHATWOOT_BOT_ACCESS_TOKEN")
+CHATWOOT_API_URL = os.getenv("CHATWOOT_API_URL")
+HANDOFF_PUBLIC_REPLY = os.getenv("HANDOFF_PUBLIC_REPLY")
+HANDOFF_PRIVATE_NOTE = os.getenv("HANDOFF_PRIVATE_NOTE")
+HANDOFF_PRIORITY = os.getenv("HANDOFF_PRIORITY")
 HTTP_TIMEOUT = 10.0
 
 @app.get("/health")
@@ -28,6 +27,7 @@ async def health():
 async def webhook(request: Request):
     payload = await request.json()
     handleContact(payload)
+
     return {"status": "ok"}
 
 

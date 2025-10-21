@@ -1,10 +1,8 @@
 from __future__ import annotations
-
 import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
-
 
 class SettingsError(ValueError):
     """Raised when environment configuration is invalid."""
@@ -14,21 +12,6 @@ class AppSettings:
     """Project-wide environment configuration loaded once at import time."""
 
     def __init__(self) -> None:
-        self.chatwoot_bot_access_token: Optional[str] = os.getenv(
-            "CHATWOOT_BOT_ACCESS_TOKEN"
-        )
-        self.chatwoot_api_url: str = os.getenv(
-            "CHATWOOT_API_URL", "http://localhost:3000/api/v1"
-        )
-        self.handoff_public_reply: str = os.getenv(
-            "HANDOFF_PUBLIC_REPLY",
-            "Ok, please hold on while I connect you with a human agent.",
-        )
-        self.handoff_private_note: str = os.getenv(
-            "HANDOFF_PRIVATE_NOTE",
-            "Bot routed the conversation for human follow-up.",
-        )
-        self.handoff_priority: str = os.getenv("HANDOFF_PRIORITY") or "high"
 
         self.openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
         self.openai_model_answer: str = os.getenv(

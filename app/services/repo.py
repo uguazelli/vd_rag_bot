@@ -4,15 +4,9 @@ from psycopg.rows import dict_row
 from app.db import get_connection
 from app.services.queries import (
     SQL_CREATE_CONTACT,
-    SQL_GET_TENANT_BY_CHATWOOT,
     SQL_GET_CONTACT_BY_PHONE_OR_EMAIL,
     SQL_UPDATE_CONTACT_FULL,
 )
-
-def get_tenant_by_chatwoot_account(account_id: int) -> Optional[Dict[str, Any]]:
-    with get_connection() as conn, conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(SQL_GET_TENANT_BY_CHATWOOT, {"account_id": account_id})
-        return cur.fetchone()
 
 def get_contact_by_phone_or_email(phone: str, email: str) -> Optional[Dict[str, Any]]:
     with get_connection() as conn, conn.cursor(row_factory=dict_row) as cur:
