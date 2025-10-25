@@ -1,96 +1,123 @@
 # VD RAG Bot
 
-FastAPI service that powers retrieval-augmented replies inside Chatwoot conversations and can synchronise contact data with Twenty CRM. This project relies on OpenAI models, a PostgreSQL database, and knowledge base files configured through environment variables.
+Python FastAPI service that powers a retrieval-augmented assistant for Chatwoot and forwards CRM events to Twenty/n8n. The bot answers with OpenAI models, routes hand-offs to humans, and uses a local vector store built from your knowledge base files.
 
-## Configuration
+---
 
-1. Copy the sample environment variables:
+## 1. Requirements
+
+- Docker and Docker Compose (latest)
+- Python 3.11 if running locally (the repo uses [uv](https://docs.astral.sh/uv/) for dependency management)
+- Chatwoot workspace with bot access
+- OpenAI API key with access to the models you plan to use
+- Optional: Twenty workspace & API key, n8n instance for workflow automation
+
+---
+
+## 2. Configuration
+
+1. Copy the template env file and edit it with real secrets:
+
    ```bash
    cp .env.example .env
    ```
-2. Update `.env` with:
-   - `OPENAI_API_KEY` and preferred model names for answers and search queries.
-   - `CHATWOOT_BOT_ACCESS_TOKEN` and `CHATWOOT_API_URL` so the bot can post messages back to Chatwoot.
-   - `TWENTY_BASE_URL` and `TWENTY_API_KEY` if you want contact syncing with Twenty. (The workspace id is read from the database; no env var needed.)
-   - Database credentials if you override the defaults supplied in `docker-compose.yml`.
-3. When the FastAPI app starts it automatically executes `init_db()` (see `app/main.py`), which issues `CREATE TABLE IF NOT EXISTS` statements. No extra migration command is required, but ensure the database referenced by `DATABASE_URL` is reachable before booting the app. Both `postgresql://` and `postgresql+psycopg://` style URLs are accepted.
 
-4. Seed the `tenants` table with at least one row so webhooks can be routed to the right credentials. For example:
+2. Populate the following variables:
 
-   ```sql
-   INSERT INTO public.tenants(
-   name, chatwoot_account_id, chatwoot_api_url, chatwoot_bot_token, twenty_workspace_id, twenty_api_key, twenty_base_url)
-   VALUES ('Veri Data',
-   1,
-   'http://host.docker.internal:3000/api/v1',
-   'zdJTabnYrPQKRK8s7cwVYLso',
-   'aec1a00b-ab4d-4109-85b2-f8bd0718401e',
-   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjZTA1MDVjOS1jZWI2LTQ2ZTQtYjk4Ni0xOTRhY2Q3OTU4ODYiLCJ0eXBlIjoiQVBJX0tFWSIsIndvcmtzcGFjZUlkIjoiY2UwNTA1YzktY2ViNi00NmU0LWI5ODYtMTk0YWNkNzk1ODg2IiwiaWF0IjoxNzYwMDQ3NzMxLCJleHAiOjQ5MTM2NDc3MzAsImp0aSI6IjhmNjJiZDc4LTY2OWMtNGE5Yi04Njk2LTE2OWIxMzA1MzUzNyJ9.tyc2KW7a10pCopjy_QaH8m5tOnXqeHLb7OGzWHNM66A',
-   'http://host.docker.internal:8000' );
+   - `OPENAI_API_KEY` – main credential used for all LLM and embedding calls
+   - `OPENAI_MODEL_ANSWER`, `OPENAI_EMBED_MODEL`, `TOP_K`, `RAG_CROSS_ENCODER_MODEL` – override models or retrieval knobs
+   - `CHATWOOT_BOT_ACCESS_TOKEN` – bot token generated from Chatwoot Settings → Agents → Add bot
+   - `CHATWOOT_API_ACCESS_TOKEN` – Personal Access Token from Chatwoot profile settings (used for outbound API calls)
+   - `CHATWOOT_API_URL` – base URL to your Chatwoot API (defaults expect Docker Desktop sharing through `host.docker.internal`)
+   - `TWENTY_API_KEY`, `TWENTY_BASE_URL` – required if you forward events to Twenty
+   - `HANDOFF_PUBLIC_REPLY`, `HANDOFF_PRIVATE_NOTE`, `HANDOFF_PRIORITY` – customise the message we send when escalating to a human agent
+   - `N8N_*` variables – base URLs for n8n webhooks if you rely on the provided workflows
 
-   ```
+3. (Optional) Point `KNOWLEDGE_FILE` and `RAG_PERSIST_DIR` to custom locations if you store documents outside the repo.
 
-   Add one row per customer/tenant with their Chatwoot and Twenty credentials.
+Chatwoot token quick reference:
 
-If you had an earlier database without the newer columns, add them manually:
+1. **Create bot** → set the webhook to `http://host.docker.internal:8080/bot`, pick a name/icon, copy the generated token into `CHATWOOT_BOT_ACCESS_TOKEN`.
+2. **Generate personal token** → click your avatar → Profile Settings → Create Personal Access Token → copy into `CHATWOOT_API_ACCESS_TOKEN`.
 
-## Running with Docker
+---
+
+## 3. Running with Docker
 
 ```bash
 docker compose up --build
 ```
 
-The API will be available on http://localhost:8080. Containers include the FastAPI app (`app`) and PostgreSQL (`db`).
+- App service exposes FastAPI at http://localhost:8080
+- n8n UI lives at http://localhost:5678 (credentials are disabled by default – add basic auth variables in `docker-compose.yml` for production)
+- Code mounts into the container at `/workspace`; `uvicorn --reload` handles hot reloads
 
-### Coding inside the container
-
-- Open a shell with all dependencies installed:
-  ```bash
-  docker compose exec app bash
-  ```
-- The image ships with the `uv` Python tool, so you can run local commands such as `uv run uvicorn app.main:app --reload`.
-- Code changes in the host repo are mounted into `/workspace`; reloads happen automatically with `--reload`.
-
-### Database access
-
-- Connection string (also set as `DATABASE_URL`): `postgresql+psycopg://vd_bot:vd_bot@localhost:55432/vd_bot`.
-- To open a psql shell:
-  ```bash
-  docker compose exec db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
-  ```
-- Data is stored in the `pgdata` volume; remove the volume to reset state.
-
-### Optional pgAdmin
-
-The main compose file also ships with a pgAdmin service. After `docker compose up`, navigate to http://localhost:5050 and log in with `admin@example.com` / `admin` (override via `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD`).
-
-- When registering the bundled Postgres server inside pgAdmin, use `db` as the host name, port `5432`, username/password `vd_bot` (or whatever you set in `.env`).
-- To connect from pgAdmin to the database exposed to the host, use `localhost` and port `55432`.
-
-## Local (non-Docker) commands
+Inside the container you can open a shell that already has dependencies installed:
 
 ```bash
-uv sync --python 3.11
-uv run --python 3.11 -- python -c "import sys; print(sys.executable, sys.version)"
-uv run --python 3.11 --env-file .env uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+docker compose exec app bash
 ```
 
-## Knowledge base ingestion
+---
 
-- rag-ingest requires the project to be installed with uv sync
+## 4. Local development without Docker
 
-1. Place the files you want indexed under `app/rag_engine/storage/`. Subfolders are supported.
-2. Ensure your `.env` (or environment) exposes the OpenAI credentials and any custom `RAG_*` overrides.
-3. (Re)build the vector store:
+1. Ensure Python 3.11 and `uv` are available on your PATH.
+2. Create the virtual env and install dependencies:
+
+   ```bash
+   uv sync --python 3.11
+   ```
+
+3. Run the API locally:
+
+   ```bash
+   uv run --python 3.11 --env-file .env uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+   ```
+
+4. (Optional) Open an interactive shell inside the project environment:
+
+   ```bash
+   uv run --python 3.11 --env-file .env python
+   ```
+
+---
+
+## 5. Knowledge base ingestion (RAG)
+
+1. Drop markdown, HTML, or text files into `app/rag_engine/storage/` (subdirectories allowed).
+2. Rebuild the vector index whenever documents change:
+
    ```bash
    uv run --python 3.11 --env-file .env rag-ingest
    ```
-   The command wipes the existing persisted vectors in `app/rag_engine/storage/vector_store/` and recreates them from the files in step 1.
-   If the CLI entry point is unavailable, run:
-   ```bash
-   uv run --python 3.11 --env-file .env python -m app.rag_engine.ingest
-   ```
 
-## Twenty configuration
+   If the CLI entry point is unavailable, run `uv run --python 3.11 --env-file .env python -m app.rag_engine.ingest`.
 
-- Inside Twenty, create a `chatwoot_id` custom field on people so that the bot and CRM can keep records in sync.
+3. The command recreates `app/rag_engine/storage/vector_store/` with the latest embeddings. Restart the API to pick up changes.
+
+---
+
+## 6. Testing the bot webhook
+
+- Point your Chatwoot bot webhook to `http://host.docker.internal:8080/bot` when running via Docker Desktop, or to `http://localhost:8080/bot` when running locally.
+- Send an inbound message in Chatwoot; the bot will classify the intent, fetch relevant context from the vector store, and respond (or escalate).
+- If you rely on n8n, confirm that recipients `http://host.docker.internal:5678/webhook/*` are reachable from the Chatwoot container.
+
+---
+
+## 7. Useful commands
+
+- `uv run --python 3.11 --env-file .env pytest` – execute the Python test suite (add tests under `tests/`)
+- `docker compose logs -f app` – follow FastAPI logs for debugging
+- `docker compose down` – stop all services and remove containers
+
+---
+
+## 8. Troubleshooting
+
+- **Authentication errors** – double-check the Chatwoot or OpenAI keys in `.env`; restart the container after editing env vars.
+- **No knowledge base hits** – ensure you ran the ingest command and that `app/rag_engine/storage/vector_store/` exists with fresh data.
+- **Timeouts to n8n** – confirm the `WEBHOOK_URL` matches the host that Chatwoot can reach (use ngrok/public URL for remote testing).
+
+Feel free to open issues or PRs with improvements or questions.
