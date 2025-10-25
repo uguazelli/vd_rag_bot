@@ -1,12 +1,10 @@
 from fastapi import FastAPI, Request
-from app.chatwoot.handleContactUpdated import handleContact
 from app.chatwoot.handoff import perform_handoff, send_message
 from app.rag_engine.rag import initial_state, handle_input
-from app.db import init_db
 import os
 import httpx
+import requests
 
-init_db()
 app = FastAPI()
 SESSIONS = {}
 
@@ -18,6 +16,7 @@ HANDOFF_PRIVATE_NOTE = os.getenv("HANDOFF_PRIVATE_NOTE")
 HANDOFF_PRIORITY = os.getenv("HANDOFF_PRIORITY")
 HTTP_TIMEOUT = 10.0
 
+
 @app.get("/health")
 async def health():
     print("🤖 Health check", flush=True)
@@ -26,48 +25,63 @@ async def health():
 @app.post("/chatwoot/webhook")
 async def webhook(request: Request):
     payload = await request.json()
-    handleContact(payload)
+    print("☎️ Chatwoot webhook payload received:", payload)
 
+    if not payload.get("event").startswith("contact_"):
+        return
+    if not payload.get("phone_number") and not payload.get("email"):
+        return
+
+    n8n = requests.post("http://host.docker.internal:5678/webhook/chatwoot", json=payload).json()
+    n8ntest = requests.post("http://host.docker.internal:5678/webhook-test/chatwoot", json=payload).json()
+    print("🔄 N8N webhook:", n8n)
+    print("🔄 N8N test webhook:", n8ntest)
     return {"status": "ok"}
 
 
 @app.post("/twenty/webhook")
 async def twenty_webhook(request: Request):
     payload = await request.json()
-    print("🔄 Twenty webhook payload received:", payload)
+    print("👩‍🔧 Twenty webhook:", payload)
+
+    # if payload.get('record').get('createdBy').get('source') == 'API':
+    #     print("👩‍🔧 Twenty webhook ignored, created by API")
+    #     return
+
+    n8n = requests.post("http://host.docker.internal:5678/webhook/twenty", json=payload).json()
+    n8ntest = requests.post("http://host.docker.internal:5678/webhook-test/twenty", json=payload).json()
+    print("🔄 N8N webhook:", n8n)
+    print("🔄 N8N test webhook:", n8ntest)
     return {"status": "ok"}
 
 
 @app.post("/bot")
 async def bot(request: Request):
+
     data = await request.json()
     convo = data.get("conversation", {}) or {}
     assignee_id = (convo.get("meta", {}) or {}).get("assignee", {}) or {}
     assignee_id = assignee_id.get("id")
-    print("🤖 Bot webhook:", data)
+    # print("🤖 VD Bot webhook:", data)
 
+    # Ignore conversations assigned to someone
     if assignee_id:
-        print("❌ Ignoring conversation assigned to someone.")
-        return {"status": "ignored conversation assigned"}
+        return
 
-    # 1. Must be a message creation event.
+    # Must be a message creation event.
     if data.get("event") != "message_created":
-        # print("❌ Ignoring non-message event:", data.get("event"))
-        return {"status": "ignored_event"}
+        return
 
-    # 2. MUST be 'incoming' (from user). This reliably prevents the infinite loop.
+    # MUST be 'incoming' (from user). This reliably prevents the infinite loop.
     if data.get("message_type") != "incoming":
-        # print("❌ Ignoring outgoing or internal message.")
-        return {"status": "ignored_outgoing"}
+        return
 
-    # 3. Ensure a sender exists to prevent KeyError later
+    # Ensure a sender exists to prevent KeyError later
     if "sender" not in data:
-        # print("❌ Ignoring message with no sender.")
-        return {"status": "ignored_no_sender"}
+        return
 
     account_id = data["account"]["id"]
     conversation_id = data["conversation"]["id"]
-
     user_id = str(data["sender"]["id"])
     text = data.get("content", "") or ""
 
@@ -83,7 +97,7 @@ async def bot(request: Request):
     # Post reply once (Chatwoot will emit an 'outgoing' webhook; we ignore it above)
     async with httpx.AsyncClient() as client:
         if reply == "human_agent":
-            print("🤖 Routing to human agent")
+            # print("😎 Routing to human agent")
             await perform_handoff(
                 client=client,
                 account_id=account_id,

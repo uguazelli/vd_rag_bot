@@ -18,9 +18,13 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://vd_bot:vd_bot@db:5432/vd_bot}
+      # Leave DATABASE_URL empty by default since we're removing Postgres from this stack.
+      # If your app *requires* it, set an external DB in .env, e.g. a managed Postgres.
+      DATABASE_URL: ${DATABASE_URL:-}
       CHATWOOT_BOT_ACCESS_TOKEN: ${CHATWOOT_BOT_ACCESS_TOKEN:-nS7yBjTg66L29cSUVypLQnGB}
       CHATWOOT_API_URL: ${CHATWOOT_API_URL:-http://localhost:3000/api/v1}
+      # If your bot calls n8n webhooks, expose the base here for convenience:
+      N8N_BASE_URL: ${N8N_BASE_URL:-http://localhost:5678}
     ports:
       - "8080:8080"
     volumes:
@@ -28,48 +32,31 @@ services:
     working_dir: /workspace
     stdin_open: true
     tty: true
-    depends_on:
-      db:
-        condition: service_healthy
+    # No DB dependency anymore
+    depends_on: []
 
-  db:
-    image: postgres:16
-    container_name: vd_rag_bot_db
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: vd_n8n
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-vd_bot}
-      POSTGRES_USER: ${POSTGRES_USER:-vd_bot}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vd_bot}
     ports:
-      - "55432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-vd_bot} -d ${POSTGRES_DB:-vd_bot}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: vd_rag_bot_pgadmin
-    restart: unless-stopped
+      - "5678:5678"
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
-    ports:
-      - "5050:80"
-    depends_on:
-      db:
-        condition: service_healthy
+      # Editor/UI URL
+      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL:-http://localhost:5678}
+      # Host/port inside container
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      # Public URL where webhooks will be reached (adjust for your domain in prod)
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678}
+      N8N_SECURE_COOKIE: "false"
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Argentina/Buenos_Aires}
+      # Optional auth for the editor (uncomment to protect in dev/prod)
+      # N8N_BASIC_AUTH_ACTIVE: "true"
+      # N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      # N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-change-me}
     volumes:
-      - pgadmin-data:/var/lib/pgadmin
+      - n8n_data:/home/node/.n8n
 
 volumes:
-  pgdata:
-  pgadmin-data:
+  n8n_data:
