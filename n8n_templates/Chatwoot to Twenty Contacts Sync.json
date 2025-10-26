@@ -1,0 +1,415 @@
+{
+  "name": "Chatwoot to Twenty Contacts Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -752
+      ],
+      "id": "299f81a7-6dfc-4c76-a455-c62981fae653",
+      "name": "Webhook",
+      "webhookId": "d67de0b9-5932-4850-944e-b24bf2f612b9"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('env').item.json.TWENTY_BASE_URL }}/rest/people",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "depth",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('env').item.json.TWENTY_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('twentyPayload').item.json}}",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        -848
+      ],
+      "id": "86f387c9-3c76-49cf-8d7b-bde6eb8b6795",
+      "name": "create_twenty_contact",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('env').item.json.TWENTY_BASE_URL }}/rest/people/{{ $('twentyID').item.json.twenty_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('env').item.json.TWENTY_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('twentyPayload').item.json }}",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        -656
+      ],
+      "id": "740b0da2-2b3a-46d2-9b0b-f616edce3220",
+      "name": "update_twenty_contact",
+      "executeOnce": false,
+      "retryOnFail": true,
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mode: Run Once for All Items\n\n// --- helpers ---\nconst CALLING_CODES = new Set([\n  '1','7','20','211','212','213','216','218','220','221','222','223','224','225','226','227','228','229',\n  '230','231','232','233','234','235','236','237','238','239','240','241','242','243','244','245','246','247','248','249',\n  '250','251','252','253','254','255','256','257','258','260','261','262','263','264','265','266','267','268','269',\n  '30','31','32','33','36','39','40','41','42','43','44','45','46','47','48','49',\n  '350','351','352','353','354','355','356','357','358','359',\n  '370','371','372','373','374','375','376','377','378','380','381','382','383','385','386','387','389',\n  '420','421','423',\n  '51','52','53','54','55','56','57','58',\n  '500','501','502','503','504','505','506','507','508','509',\n  '591','592','593','594','595','596','597','598','599',\n  '60','61','62','63','64','65','66','81','82','84','85','86','852','853','855','856','880','886',\n  '90','91','92','93','94','95','96','97','98',\n  '970','971','972','973','974','975','976','977','979',\n  '672','673','674','675','676','677','678','679','680','681','682','683','684','685','686','687','688','689','690','691','692',\n  '800','808','870','878','881','882','883','888','979'\n]);\n\nconst splitByCallingCode = (raw) => {\n  if (!raw || typeof raw !== 'string') return { callingCode: '', phone: '' };\n  const cleaned = raw.trim().replace(/[^\\d+]/g, '');\n  if (!cleaned.startsWith('+')) return { callingCode: '', phone: cleaned.replace(/\\D/g, '') };\n  const digits = cleaned.slice(1).replace(/\\D/g, '');\n  for (const len of [3,2,1]) {\n    const cc = digits.slice(0, len);\n    if (CALLING_CODES.has(cc)) return { callingCode: cc, phone: digits.slice(len) };\n  }\n  return { callingCode: '', phone: digits };\n};\n\nconst withPlus = (cc) => cc ? `+${cc.replace(/^\\+/, '')}` : '';\n\n// --- source data (single webhook item) ---\nconst body    = $input.first()?.json?.body ?? {};\nconst email   = body.email ?? '';\nconst phoneNowRaw = body.phone_number ?? '';\n\n// changed_attributes (order can vary)\nconst changes = Array.isArray(body.changed_attributes) ? body.changed_attributes : [];\nconst changedPhone = changes.find(x => x.phone_number)?.phone_number;\nconst phonePrevRaw = changedPhone?.previous_value ?? null;\n\n// --- parse current & previous ---\nconst now  = splitByCallingCode(phoneNowRaw);\nconst prev = splitByCallingCode(phonePrevRaw);\n\n// --- build output (with + on both calling codes) ---\nconst out = {\n  email,\n  e164phone: {\n    callingCode: withPlus(now.callingCode),          // \"+595\" (or \"\")\n    phone:       now.phone,                          // national number only\n    phone_raw:   phoneNowRaw,\n    phone_normalized: now.callingCode ? `${now.callingCode}${now.phone}` : now.phone\n  },\n  originals: {\n    originalEmail:        changes.find(x => x.email)?.email?.previous_value ?? body.email ?? null,\n    originalCallingCode:  withPlus(prev.callingCode), // \"+595\" (or \"\")\n    originalPhone:        prev.phone                  // national number only\n  }\n};\n\nreturn [{ json: out }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -752
+      ],
+      "id": "c19d993e-465c-4b74-9cbe-9d9080820f69",
+      "name": "e164phoneAndEmail"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "abd46b04-9cfd-4cdc-a5eb-b7a5d900f3e0",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "2e8dc818-b586-4664-b765-4afcadec4e9e",
+              "leftValue": "={{ $json.e164phone.phone_raw }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        -752
+      ],
+      "id": "996f1ded-72c3-42c4-9031-912d2c2f7642",
+      "name": "hasEmailOrPhone"
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhook = $('Webhook').first()?.json?.body ?? {};\nconst e164    = $('e164phoneAndEmail').first()?.json ?? {};\n\nconst fullName = String(webhook.name ?? '').trim();\nconst email    = String(webhook.email ?? '').trim();\nconst city     = String(webhook?.additional_attributes?.city ?? '').trim();\n\nconst parts = fullName.split(/\\s+/);\nconst firstName = (parts[0] ?? '').trim();\nconst lastName  = (parts.slice(1).join(' ') ?? '').trim();\n\nconst phoneNumber = String(e164.e164phone?.phone ?? '').trim();\nconst callingCode = String(e164.e164phone?.callingCode ?? '').trim();\n\nconst payload = {};\n\nif (firstName || lastName) {\n  payload.name = {};\n  if (firstName) payload.name.firstName = firstName;\n  if (lastName)  payload.name.lastName = lastName;\n}\n\nif (phoneNumber || callingCode) {\n  payload.phones = {};\n  if (phoneNumber) payload.phones.primaryPhoneNumber = phoneNumber;\n  if (callingCode) payload.phones.primaryPhoneCallingCode = callingCode;\n}\n\nif (email) payload.emails = { primaryEmail: email };\nif (city)  payload.city = city;\n\nreturn [{ json: payload }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -752
+      ],
+      "id": "8029e257-c1f6-4a1f-88d6-850e663062cf",
+      "name": "twentyPayload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cef382f2-5142-456b-bd65-c1bff170fc38",
+              "leftValue": "={{ $('twentyID').item.json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        -752
+      ],
+      "id": "b6569a98-ec82-4464-95b2-a91c0097aadb",
+      "name": "isNewContact"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "lUhsVZsu18qCIQYq",
+          "mode": "list",
+          "cachedResultName": "contacts",
+          "cachedResultUrl": "/projects/twkY2o4gyxVcgrgt/datatables/lUhsVZsu18qCIQYq"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chatwoot_id": "={{ $('Webhook').item.json.body.id }}",
+            "twenty_id": "={{ $json.data.createPerson.id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chatwoot_id",
+              "displayName": "chatwoot_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "twenty_id",
+              "displayName": "twenty_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        -848
+      ],
+      "id": "26952423-5008-4d1d-9748-ad9f8180cf7d",
+      "name": "Insert row"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lUhsVZsu18qCIQYq",
+          "mode": "list",
+          "cachedResultName": "contacts",
+          "cachedResultUrl": "/projects/twkY2o4gyxVcgrgt/datatables/lUhsVZsu18qCIQYq"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "chatwoot_id",
+              "keyValue": "={{ $('Webhook').item.json.body.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -752
+      ],
+      "id": "c6ea3b58-534e-4b30-a9e5-3692262646cb",
+      "name": "twentyID",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  TWENTY_BASE_URL: $env.TWENTY_BASE_URL,\n  TWENTY_API_KEY: $env.TWENTY_API_KEY\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -752
+      ],
+      "id": "9b96b990-434e-48b7-9fc8-75698b1e27d8",
+      "name": "env"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "e164phoneAndEmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "e164phoneAndEmail": {
+      "main": [
+        [
+          {
+            "node": "hasEmailOrPhone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "hasEmailOrPhone": {
+      "main": [
+        [
+          {
+            "node": "twentyID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "twentyPayload": {
+      "main": [
+        [
+          {
+            "node": "env",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "isNewContact": {
+      "main": [
+        [
+          {
+            "node": "create_twenty_contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "update_twenty_contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_twenty_contact": {
+      "main": [
+        [
+          {
+            "node": "Insert row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "twentyID": {
+      "main": [
+        [
+          {
+            "node": "twentyPayload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update_twenty_contact": {
+      "main": [
+        []
+      ]
+    },
+    "env": {
+      "main": [
+        [
+          {
+            "node": "isNewContact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c5a1f4d8-a76a-4e05-b19c-213b2d9d52eb",
+  "meta": {
+    "instanceId": "4d6f9fffe4574300f66e84bcdf43f5a86e3f8815e37a64af7675d731ffcce990"
+  },
+  "id": "FghscaQeLs2GkQ09",
+  "tags": []
+}

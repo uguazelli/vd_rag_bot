@@ -1,0 +1,445 @@
+{
+  "name": "Twenty to Chatwoot Contacts Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "twenty",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -736
+      ],
+      "id": "5c7cb17f-81bc-49dd-beca-06ba06a5e811",
+      "name": "Webhook",
+      "webhookId": "766efa2a-36f8-4969-8a4c-788e8c50dc6c"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('env').item.json.CHATWOOT_API_URL }}/accounts/{{ $('env').item.json.CHATWOOT_ACCOUNT_ID }}/contacts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $('env').item.json.CHATWOOT_API_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ [$('create_payload').item.json][0] }}",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        -832
+      ],
+      "id": "a76e7ff8-d473-45d4-834d-2015fd7f99ca",
+      "name": "create_contact"
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Webhook').item.json.body?.record || {};\n\nconst payload = {};\n\nconst fullName = [r?.name?.firstName, r?.name?.lastName].filter(Boolean).join(' ').trim();\nif (fullName) payload.name = fullName;\n\nif (r?.emails?.primaryEmail) payload.email = r.emails.primaryEmail;\n\nconst phoneCore = [r?.phones?.primaryPhoneCallingCode, r?.phones?.primaryPhoneNumber]\n  .filter(Boolean)\n  .join('');\nif (phoneCore) payload.phone_number = `${phoneCore}`;\n\nif (r?.city) payload.additional_attributes = { city: r.city };\n\n\nreturn payload;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        -640
+      ],
+      "id": "b6610f2c-eaf8-415b-9929-824069360e42",
+      "name": "update_payload"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('env').item.json.CHATWOOT_API_URL }}/accounts/{{ $('env').item.json.CHATWOOT_ACCOUNT_ID }}/contacts/{{ $('chatwootID').item.json.chatwoot_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $('env').item.json.CHATWOOT_API_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('update_payload').item.json }}",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        -640
+      ],
+      "id": "3a5f8fbb-bfcd-4246-abbc-c3d58a907f46",
+      "name": "update_contact"
+    },
+    {
+      "parameters": {
+        "jsCode": "const record = $(\"Webhook\").item.json.body.record\n\nconst countryCode = record.phones.primaryPhoneCallingCode\nconst phoneNumber = record.phones.primaryPhoneNumber\nconst phone = phoneNumber? countryCode+phoneNumber : null\n\nconst email = record.emails.primaryEmail || null\n\nconst values = {\n  phone: phone,\n  email: email\n}\n\nreturn values"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -736
+      ],
+      "id": "21e78181-c6f8-4cb4-9fff-58f2a0e25826",
+      "name": "twenty_email_and_phone"
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Webhook').item.json.body?.record || {};\n\nconst payload = {};\n\nconst fullName = [r?.name?.firstName, r?.name?.lastName].filter(Boolean).join(' ').trim();\nif (fullName) payload.name = fullName;\n\nif (r?.emails?.primaryEmail) payload.email = r.emails.primaryEmail;\n\nconst phoneCore = [r?.phones?.primaryPhoneCallingCode, r?.phones?.primaryPhoneNumber]\n  .filter(Boolean)\n  .join('');\nif (phoneCore) payload.phone_number = `+${phoneCore.replace(/^\\++/, \"\")}`;\n\nif (r?.city) payload.additional_attributes = { city: r.city };\n\n\nreturn payload;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        -832
+      ],
+      "id": "1dd17184-9a08-4b31-aa20-789468e1299d",
+      "name": "create_payload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "770b0270-67dd-4d8e-a394-1ead9db5a86c",
+              "leftValue": "={{ $('twenty_email_and_phone').item.json.phone }}",
+              "rightValue": "\"\"",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "f6d0ec02-4c3f-4560-8381-fe8000c21f67",
+              "leftValue": "={{ $('twenty_email_and_phone').item.json.email }}",
+              "rightValue": "\"\"",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        -736
+      ],
+      "id": "0db10fad-cffd-49e5-bab0-5c705871d113",
+      "name": "hasEmailOrPhone"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "lUhsVZsu18qCIQYq",
+          "mode": "list",
+          "cachedResultName": "contacts",
+          "cachedResultUrl": "/projects/twkY2o4gyxVcgrgt/datatables/lUhsVZsu18qCIQYq"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "twenty_id",
+              "keyValue": "={{ $('Webhook').item.json.body.record.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -736
+      ],
+      "id": "32e8c0c4-5add-4759-824a-998fa3702859",
+      "name": "chatwootID",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cef382f2-5142-456b-bd65-c1bff170fc38",
+              "leftValue": "={{ $('chatwootID').item.json }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "object",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        -736
+      ],
+      "id": "eaeb73b8-3275-4572-b170-35d14e6acbb3",
+      "name": "isNewContact"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "lUhsVZsu18qCIQYq",
+          "mode": "list",
+          "cachedResultName": "contacts",
+          "cachedResultUrl": "/projects/twkY2o4gyxVcgrgt/datatables/lUhsVZsu18qCIQYq"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chatwoot_id": "={{ $json.payload.contact.id }}",
+            "twenty_id": "={{ $('Webhook').item.json.body.record.id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chatwoot_id",
+              "displayName": "chatwoot_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "twenty_id",
+              "displayName": "twenty_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        -832
+      ],
+      "id": "2d3e1c3d-e014-460c-b5ed-6c449168d78a",
+      "name": "Insert row"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  CHATWOOT_API_URL: $env.CHATWOOT_API_URL\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -640
+      ],
+      "id": "71cd48d3-789a-43b5-9d19-6d232298b36d",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  CHATWOOT_ACCOUNT_ID: $env.CHATWOOT_ACCOUNT_ID,\n  CHATWOOT_API_URL: $env.CHATWOOT_API_URL,\n  CHATWOOT_API_ACCESS_TOKEN: $env.CHATWOOT_API_ACCESS_TOKEN\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -736
+      ],
+      "id": "06177b0e-9d06-4ce6-a8a2-0a4e119ddcbe",
+      "name": "env"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "twenty_email_and_phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update_payload": {
+      "main": [
+        [
+          {
+            "node": "update_contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "twenty_email_and_phone": {
+      "main": [
+        [
+          {
+            "node": "hasEmailOrPhone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_payload": {
+      "main": [
+        [
+          {
+            "node": "create_contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "hasEmailOrPhone": {
+      "main": [
+        [
+          {
+            "node": "chatwootID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "chatwootID": {
+      "main": [
+        [
+          {
+            "node": "env",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "isNewContact": {
+      "main": [
+        [
+          {
+            "node": "create_payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "update_payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_contact": {
+      "main": [
+        [
+          {
+            "node": "Insert row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update_contact": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "env": {
+      "main": [
+        [
+          {
+            "node": "isNewContact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d2b08e6a-5470-4d34-ad6e-cc28f9cb4afd",
+  "meta": {
+    "instanceId": "4d6f9fffe4574300f66e84bcdf43f5a86e3f8815e37a64af7675d731ffcce990"
+  },
+  "id": "Cy7nSWL54DiIh0ED",
+  "tags": []
+}
