@@ -16,5 +16,9 @@ dependencies = [
 [project.scripts]
 rag-ingest = "app.rag_engine.ingest:main"
 
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["n8n_templates*"]
+
 [tool.uv]
 package = true

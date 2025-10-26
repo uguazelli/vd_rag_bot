@@ -20,7 +20,7 @@ HTTP_TIMEOUT = 10.0
 @app.get("/health")
 async def health():
     print("🤖 Health check", flush=True)
-    return {"status": "True"}
+    return {"message": "Status OK"}
 
 @app.post("/chatwoot/webhook")
 async def webhook(request: Request):
@@ -28,15 +28,15 @@ async def webhook(request: Request):
     print("☎️ Chatwoot webhook payload received:", payload)
 
     if not payload.get("event").startswith("contact_"):
-        return
+        return {"message": "Not a contact event"}
     if not payload.get("phone_number") and not payload.get("email"):
-        return
+        return {"message": "No phone number or email detected"}
 
     n8n = requests.post("http://host.docker.internal:5678/webhook/chatwoot", json=payload).json()
     n8ntest = requests.post("http://host.docker.internal:5678/webhook-test/chatwoot", json=payload).json()
     print("🔄 N8N webhook:", n8n)
     print("🔄 N8N test webhook:", n8ntest)
-    return {"status": "ok"}
+    return {"message": "Chatwoot webhook processed"}
 
 
 @app.post("/twenty/webhook")
@@ -44,15 +44,15 @@ async def twenty_webhook(request: Request):
     payload = await request.json()
     print("👩‍🔧 Twenty webhook:", payload)
 
-    # if payload.get('record').get('createdBy').get('source') == 'API':
-    #     print("👩‍🔧 Twenty webhook ignored, created by API")
-    #     return
+    if payload.get("record", {}).get("deletedAt"):
+        print("🧹 Deletion detected, skipping n8n call.")
+        return {"message": "Deletion detected, skipping n8n call."}
 
     n8n = requests.post("http://host.docker.internal:5678/webhook/twenty", json=payload).json()
     n8ntest = requests.post("http://host.docker.internal:5678/webhook-test/twenty", json=payload).json()
     print("🔄 N8N webhook:", n8n)
     print("🔄 N8N test webhook:", n8ntest)
-    return {"status": "ok"}
+    return {"message": "Twenty webhook processed"}
 
 
 @app.post("/bot")
@@ -66,19 +66,19 @@ async def bot(request: Request):
 
     # Ignore conversations assigned to someone
     if assignee_id:
-        return
+        return {"message": "Conversation is assigned to someone"}
 
     # Must be a message creation event.
     if data.get("event") != "message_created":
-        return
+        return {"message": "Not a message creation event"}
 
     # MUST be 'incoming' (from user). This reliably prevents the infinite loop.
     if data.get("message_type") != "incoming":
-        return
+        return {"message": "Not an incoming message"}
 
     # Ensure a sender exists to prevent KeyError later
     if "sender" not in data:
-        return
+        return {"message": "No sender detected"}
 
     account_id = data["account"]["id"]
     conversation_id = data["conversation"]["id"]
@@ -108,7 +108,7 @@ async def bot(request: Request):
                 private_note=HANDOFF_PRIVATE_NOTE,
                 priority=HANDOFF_PRIORITY,
             )
-            return {"status": "handoff"}
+            return {"message": "Routing to human agent"}
 
         await send_message(
             client=client,
@@ -120,4 +120,4 @@ async def bot(request: Request):
             private=False,
         )
 
-    return {"status": "success"}
+    return {"message": "VD Bot processed"}
