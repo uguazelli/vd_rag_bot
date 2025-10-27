@@ -24,6 +24,7 @@ Python FastAPI service that powers a retrieval-augmented assistant for Chatwoot 
 
 2. Populate the following variables:
 
+   - `DATABASE_URL` – Postgres connection string (e.g. `postgresql+psycopg://user:pass@host:5432/db`)
    - `OPENAI_API_KEY` – main credential used for all LLM and embedding calls
    - `OPENAI_MODEL_ANSWER`, `OPENAI_EMBED_MODEL`, `TOP_K`, `RAG_CROSS_ENCODER_MODEL` – override models or retrieval knobs
    - `CHATWOOT_BOT_ACCESS_TOKEN` – bot token generated from Chatwoot Settings → Agents → Add bot
