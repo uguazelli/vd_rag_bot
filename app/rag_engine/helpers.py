@@ -12,8 +12,23 @@ from llama_index.core.retrievers.fusion_retriever import QueryFusionRetriever
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 
-from app.config import settings
 from app.db.repository import get_params_by_omnichannel_id
+
+
+DEFAULT_MODEL_ANSWER = "gpt-4o-mini"
+DEFAULT_EMBED_MODEL = "text-embedding-3-small"
+DEFAULT_TEMPERATURE = 0.1
+DEFAULT_TOP_K = 4
+DEFAULT_MULTI_QUERY = 3
+DEFAULT_RERANK_TOP_N = 5
+DEFAULT_RETRIEVER_CANDIDATES = 10
+
+DEFAULT_STORAGE_DIR = Path(__file__).parent / "storage"
+PERSIST_DIR = (
+    Path(os.getenv("RAG_PERSIST_DIR")).expanduser().resolve()
+    if os.getenv("RAG_PERSIST_DIR")
+    else (DEFAULT_STORAGE_DIR / "vector_store").resolve()
+)
 
 
 def _parse_params(raw: Any) -> Dict[str, Any]:
@@ -30,43 +45,43 @@ def _parse_params(raw: Any) -> Dict[str, Any]:
     return {}
 
 
-def _configure_models(tenant: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    if tenant is None:
-        Settings.llm = OpenAI(
-            api_key=settings.openai_api_key,
-            model=settings.openai_model_answer,
-            temperature=0.1,
-        )
-        Settings.embed_model = OpenAIEmbedding(
-            api_key=settings.openai_api_key,
-            model=settings.openai_embed_model,
-        )
-        return {}
+def _coerce_int(value: Any, fallback: int) -> int:
+    try:
+        parsed = int(value)
+        if parsed > 0:
+            return parsed
+    except (TypeError, ValueError):
+        pass
+    return fallback
 
-    llm_config = tenant.get("llm") or {}
-    params = _parse_params(llm_config.get("params"))
 
-    api_key = llm_config.get("api_key")
+def _coerce_float(value: Any, fallback: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _configure_models(config: Dict[str, Any]) -> Dict[str, Any]:
+    llm_params = _parse_params(config.get("llm_params"))
+
+    api_key = config.get("llm_api_key") or llm_params.get("api_key")
     if not api_key:
         raise RuntimeError("Tenant LLM configuration missing required OpenAI API key.")
 
-    model_answer = params.get("model_answer") or settings.openai_model_answer
-    embed_model = params.get("openai_embed_model") or settings.openai_embed_model
-    temperature = params.get("temperature", 0.1)
+    model_answer = llm_params.get("model_answer") or DEFAULT_MODEL_ANSWER
+    embed_model = llm_params.get("openai_embed_model") or DEFAULT_EMBED_MODEL
+    temperature = _coerce_float(llm_params.get("temperature"), DEFAULT_TEMPERATURE)
 
     Settings.llm = OpenAI(api_key=api_key, model=model_answer, temperature=temperature)
     Settings.embed_model = OpenAIEmbedding(api_key=api_key, model=embed_model)
 
-    return params
+    return llm_params
 
 
 @lru_cache(maxsize=1)
 def _load_index():
-    env_path = (os.getenv("RAG_PERSIST_DIR") or "").strip()
-    if env_path:
-        persist_dir = Path(env_path).expanduser().resolve()
-    else:
-        persist_dir = (Path(__file__).parent / "storage" / "vector_store").resolve()
+    persist_dir = PERSIST_DIR
     if not persist_dir.exists():
         raise RuntimeError(
             f"No persisted index found at {persist_dir}. "
@@ -76,16 +91,42 @@ def _load_index():
     return load_index_from_storage(storage_context)
 
 
-async def get_query_engine(account_id: int, tenant: Optional[Dict[str, Any]] = None) -> RetrieverQueryEngine:
-    print(f"🤖 get_query_engine function")
+async def load_runtime_config(account_id: int) -> Dict[str, Any]:
     cached_params = await get_params_by_omnichannel_id(account_id)
-    print(f"👩‍🔧 Tenant LLM params: {cached_params}")
-    params = _configure_models(tenant)
+    if not cached_params:
+        raise RuntimeError(
+            f"No tenant configuration found for omnichannel id {account_id}"
+        )
+    return cached_params
 
-    top_k = int(params.get("top_k", settings.retriever_candidates))
-    rerank_top_n = int(params.get("rerank_top_n", settings.rerank_top_n))
-    multi_query = int(params.get("multi_query_count", settings.multi_query_count))
-    candidate_pool = max(top_k, int(params.get("retriever_candidates", settings.retriever_candidates)))
+
+def configure_llm_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    return _configure_models(config)
+
+
+async def get_query_engine(
+    account_id: int,
+    *,
+    runtime_config: Optional[Dict[str, Any]] = None,
+    llm_params: Optional[Dict[str, Any]] = None,
+) -> RetrieverQueryEngine:
+    config = runtime_config or await load_runtime_config(account_id)
+    runtime_llm_params = llm_params or _configure_models(config)
+
+    top_k = _coerce_int(runtime_llm_params.get("top_k"), DEFAULT_TOP_K)
+    retriever_candidates = _coerce_int(
+        runtime_llm_params.get("retriever_candidates"),
+        max(DEFAULT_RETRIEVER_CANDIDATES, top_k),
+    )
+    candidate_pool = max(top_k, retriever_candidates)
+    rerank_top_n = _coerce_int(
+        runtime_llm_params.get("rerank_top_n"),
+        max(DEFAULT_RERANK_TOP_N, min(candidate_pool, top_k)),
+    )
+    rerank_top_n = min(rerank_top_n, candidate_pool)
+    multi_query = _coerce_int(
+        runtime_llm_params.get("multi_query_count"), DEFAULT_MULTI_QUERY
+    )
 
     index = _load_index()
     base_retriever = index.as_retriever(similarity_top_k=candidate_pool)

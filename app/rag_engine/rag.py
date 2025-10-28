@@ -1,7 +1,12 @@
 from typing import Any, Dict, Tuple
 from llama_index.core import Settings
 from llama_index.core.prompts import PromptTemplate
-from .helpers import get_query_engine
+
+from .helpers import (
+    configure_llm_from_config,
+    get_query_engine,
+    load_runtime_config,
+)
 
 _CLASSIFIER_PROMPT = (
     "You are an intent classifier for an AI support assistant. "
@@ -66,6 +71,8 @@ async def handle_input(state: Dict[str, Any], text: str, account_id: int) -> Tup
     if not prompt:
         return state, "Sorry, I didn't catch that. Could you try again?", "ok"
 
+    runtime_config = await load_runtime_config(account_id)
+    llm_params = configure_llm_from_config(runtime_config)
     intent = _classify_intent(prompt)
 
     if intent == "HANDOFF":
@@ -75,7 +82,11 @@ async def handle_input(state: Dict[str, Any], text: str, account_id: int) -> Tup
         return state, reply, "ok"
 
     try:
-        query_engine = await get_query_engine(account_id=account_id)
+        query_engine = await get_query_engine(
+            account_id=account_id,
+            runtime_config=runtime_config,
+            llm_params=llm_params,
+        )
         response = query_engine.query(prompt)
         answer = getattr(response, "response", None) or str(response)
         return state, answer.strip(), "ok"

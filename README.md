@@ -25,13 +25,10 @@ Python FastAPI service that powers a retrieval-augmented assistant for Chatwoot 
 2. Populate the following variables:
 
    - `DATABASE_URL` – Postgres connection string (e.g. `postgresql+psycopg://user:pass@host:5432/db`)
-   - `OPENAI_API_KEY` – main credential used for all LLM and embedding calls
-   - `OPENAI_MODEL_ANSWER`, `OPENAI_EMBED_MODEL`, `TOP_K`, `RAG_CROSS_ENCODER_MODEL` – override models or retrieval knobs
    - `CHATWOOT_BOT_ACCESS_TOKEN` – bot token generated from Chatwoot Settings → Agents → Add bot
    - `CHATWOOT_API_ACCESS_TOKEN` – Personal Access Token from Chatwoot profile settings (used for outbound API calls)
    - `CHATWOOT_API_URL` – base URL to your Chatwoot API (defaults expect Docker Desktop sharing through `host.docker.internal`)
    - `TWENTY_API_KEY`, `TWENTY_BASE_URL` – required if you forward events to Twenty
-   - `HANDOFF_PUBLIC_REPLY`, `HANDOFF_PRIVATE_NOTE`, `HANDOFF_PRIORITY` – customise the message we send when escalating to a human agent
    - `N8N_*` variables – base URLs for n8n webhooks if you rely on the provided workflows
 
 3. (Optional) Point `KNOWLEDGE_FILE` and `RAG_PERSIST_DIR` to custom locations if you store documents outside the repo.

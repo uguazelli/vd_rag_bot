@@ -2,22 +2,15 @@ from fastapi import FastAPI, Request
 from app.chatwoot.handoff import perform_handoff, send_message
 from app.db.repository import get_params_by_omnichannel_id
 from app.rag_engine.rag import initial_state, handle_input
-import os
 import httpx
 import requests
-
+import os
 
 app = FastAPI()
 SESSIONS = {}
-
-# Defaults are cheap/solid; override via env if you want
+HANDOFF_PRIORITY= "high"
 CHATWOOT_BOT_ACCESS_TOKEN = os.getenv("CHATWOOT_BOT_ACCESS_TOKEN")
 CHATWOOT_API_URL = os.getenv("CHATWOOT_API_URL")
-HANDOFF_PUBLIC_REPLY = os.getenv("HANDOFF_PUBLIC_REPLY")
-HANDOFF_PRIVATE_NOTE = os.getenv("HANDOFF_PRIVATE_NOTE")
-HANDOFF_PRIORITY = os.getenv("HANDOFF_PRIORITY")
-HTTP_TIMEOUT = 10.0
-
 
 @app.get("/health")
 async def health():
@@ -87,9 +80,15 @@ async def bot(request: Request):
     user_id = str(data["sender"]["id"])
     text = data.get("content", "") or ""
 
-    # print("🤖 Account ID:", account_id)
-    # client_params = await get_params_by_omnichannel_id(account_id)
-    # print("🤖 Omnichannel ID:", client_params)
+    print("🤖 Account ID:", account_id)
+    cfg = await get_params_by_omnichannel_id(account_id)
+    # print("🤖 Configuration:", cfg)
+
+    # chatwoot_api_url = cfg.get("omnichannel").get('chatwoot_api_url')
+    # chatwoot_bot_access_token = cfg.get("omnichannel").get('chatwoot_bot_access_token')
+
+    handoff_public_reply = cfg.get("llm_params").get('handoff_public_reply')
+    handoff_private_note = cfg.get("llm_params").get('handoff_private_note')
 
     state = SESSIONS.get(user_id) or initial_state()
     state, reply, status = await handle_input(state, text, account_id)
@@ -98,7 +97,6 @@ async def bot(request: Request):
     # print("🤖 Bot reply:", reply)
     # print("🤖 Bot status:", status)
     # print("🤖 Bot state:", state)
-
 
     # Post reply once (Chatwoot will emit an 'outgoing' webhook; we ignore it above)
     async with httpx.AsyncClient() as client:
@@ -110,8 +108,8 @@ async def bot(request: Request):
                 conversation_id=conversation_id,
                 api_url=CHATWOOT_API_URL,
                 access_token=CHATWOOT_BOT_ACCESS_TOKEN,
-                public_reply=HANDOFF_PUBLIC_REPLY,
-                private_note=HANDOFF_PRIVATE_NOTE,
+                public_reply=handoff_public_reply,
+                private_note=handoff_private_note,
                 priority=HANDOFF_PRIORITY,
             )
             return {"message": "Routing to human agent"}

@@ -1,17 +1,23 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 from pathlib import Path
 
 from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
 
-from app.config import settings
 from .helpers import DEFAULT_STORAGE_DIR, PERSIST_DIR
 
-DOCUMENTS_DIR = settings.resolve_path(
-    settings.rag_source_dir, DEFAULT_STORAGE_DIR
-)
+
+def _default_documents_dir() -> Path:
+    env_path = os.getenv("RAG_SOURCE_DIR")
+    if env_path and env_path.strip():
+        return Path(env_path).expanduser().resolve()
+    return DEFAULT_STORAGE_DIR.resolve()
+
+
+DOCUMENTS_DIR = _default_documents_dir()
 
 
 def rebuild_index(documents_dir: Path, persist_dir: Path) -> int:
