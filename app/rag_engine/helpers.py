@@ -13,6 +13,7 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 
 from app.config import settings
+from app.db.repository import get_params_by_omnichannel_id
 
 
 def _parse_params(raw: Any) -> Dict[str, Any]:
@@ -75,7 +76,10 @@ def _load_index():
     return load_index_from_storage(storage_context)
 
 
-def get_query_engine(tenant: Optional[Dict[str, Any]] = None) -> RetrieverQueryEngine:
+async def get_query_engine(account_id: int, tenant: Optional[Dict[str, Any]] = None) -> RetrieverQueryEngine:
+    print(f"🤖 get_query_engine function")
+    cached_params = await get_params_by_omnichannel_id(account_id)
+    print(f"👩‍🔧 Tenant LLM params: {cached_params}")
     params = _configure_models(tenant)
 
     top_k = int(params.get("top_k", settings.retriever_candidates))

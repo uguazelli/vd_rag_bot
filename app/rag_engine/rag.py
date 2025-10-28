@@ -60,7 +60,8 @@ def initial_state() -> Dict[str, Any]:
     return {}
 
 
-def handle_input(state: Dict[str, Any], text: str) -> Tuple[Dict[str, Any], str, str]:
+async def handle_input(state: Dict[str, Any], text: str, account_id: int) -> Tuple[Dict[str, Any], str, str]:
+    print(f"🤖 handle_input function")
     prompt = (text or "").strip()
     if not prompt:
         return state, "Sorry, I didn't catch that. Could you try again?", "ok"
@@ -74,7 +75,7 @@ def handle_input(state: Dict[str, Any], text: str) -> Tuple[Dict[str, Any], str,
         return state, reply, "ok"
 
     try:
-        query_engine = get_query_engine()
+        query_engine = await get_query_engine(account_id=account_id)
         response = query_engine.query(prompt)
         answer = getattr(response, "response", None) or str(response)
         return state, answer.strip(), "ok"

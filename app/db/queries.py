@@ -4,79 +4,17 @@ Keeping queries in their own module keeps repository functions concise and
 makes it easy to share statements between different call sites.
 """
 
-SQL_GET_TENANT_BY_CHATWOOT_ACCOUNT_ID = """
-SELECT *
-FROM tenants
-WHERE chatwoot_account_id = %(chatwoot_account_id)s
+SQL_GET_PARAMS_BY_OMNICHANNEL_ID = """
+SELECT
+  t.id, t.email,
+  l.id as llm_id, l.name as llm_name, l.api_key as llm_api_key, l.params as llm_params,
+  c.id as crm_id, c.url as crm_url, c.api_key as crm_api_key, c.params as crm_params,
+  o.id as omnichannel_id, o.params as omnichannel
+FROM tenants AS t
+JOIN llm         AS l ON l.tenant_id = t.id
+JOIN crm         AS c ON c.tenant_id = t.id
+JOIN omnichannel AS o ON o.tenant_id = t.id
+WHERE o.id = %(omnichannel_id)s
 """
 
 
-SQL_GET_CONTACT_BY_PHONE_OR_EMAIL = """
-SELECT *
-FROM contacts
-WHERE phone = %(phone)s OR LOWER(email) = LOWER(%(email)s)
-LIMIT 1
-"""
-
-
-SQL_CREATE_CONTACT = """
-INSERT INTO contacts (
-  tenant_id,
-  first_name,
-  last_name,
-  email,
-  phone,
-  city,
-  job_title,
-  linkedin_url,
-  facebook_url,
-  instagram_url,
-  github_url,
-  x_url,
-  company_id,
-  chatwoot_contact_id,
-  twenty_person_id,
-  created_at,
-  updated_at
-) VALUES (
-  %(tenant_id)s,
-  %(first_name)s,
-  %(last_name)s,
-  %(email)s,
-  %(phone)s,
-  %(city)s,
-  %(job_title)s,
-  %(linkedin_url)s,
-  %(facebook_url)s,
-  %(instagram_url)s,
-  %(github_url)s,
-  %(x_url)s,
-  %(company_id)s,
-  %(chatwoot_contact_id)s,
-  %(twenty_person_id)s,
-  NOW(),
-  NOW()
-)
-RETURNING id
-"""
-
-
-SQL_UPDATE_CONTACT_FULL = """
-UPDATE contacts
-SET
-  first_name = %(first_name)s,
-  last_name = %(last_name)s,
-  email = %(email)s,
-  phone = %(phone)s,
-  city = %(city)s,
-  linkedin_url = %(linkedin_url)s,
-  facebook_url = %(facebook_url)s,
-  instagram_url = %(instagram_url)s,
-  github_url = %(github_url)s,
-  x_url = %(x_url)s,
-  company_id = %(company_id)s,
-  chatwoot_contact_id = %(chatwoot_contact_id)s,
-  twenty_person_id = %(twenty_person_id)s,
-  updated_at = NOW()
-WHERE id = %(contact_id)s
-"""

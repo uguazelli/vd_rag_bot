@@ -1,33 +1,20 @@
-"""Database connection helpers.
-
-This module centralises how the application obtains PostgreSQL connections so
-all callers share the same environment-driven configuration.
-"""
-
-from __future__ import annotations
-
+# /workspace/app/db/connection.py
 import os
-from contextlib import contextmanager
-from typing import Iterator
-
 import psycopg
+from contextlib import contextmanager
 
-
-def _database_url() -> str:
-    url = os.getenv("DATABASE_URL")
-    if not url:
-        raise RuntimeError("DATABASE_URL environment variable is required for database access.")
-    return url
-
+def _database_dsn() -> str:
+    host = os.getenv("DB_HOST", "host.docker.internal")
+    port = os.getenv("DB_PORT", "5433")
+    db   = os.getenv("DB_NAME", "vd")
+    user = os.getenv("DB_USER", "vd")
+    pwd  = os.getenv("DB_PASSWORD", "vd")
+    return f"postgresql://{user}:{pwd}@{host}:{port}/{db}"
 
 @contextmanager
-def get_connection() -> Iterator[psycopg.Connection]:
-    """Yield a Postgres connection configured from the environment."""
-
-    conn: psycopg.Connection | None = None
+def get_connection():
+    conn = psycopg.connect(_database_dsn())
     try:
-        conn = psycopg.connect(_database_url())
         yield conn
     finally:
-        if conn is not None:
-            conn.close()
+        conn.close()

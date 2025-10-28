@@ -1,9 +1,11 @@
 from fastapi import FastAPI, Request
 from app.chatwoot.handoff import perform_handoff, send_message
+from app.db.repository import get_params_by_omnichannel_id
 from app.rag_engine.rag import initial_state, handle_input
 import os
 import httpx
 import requests
+
 
 app = FastAPI()
 SESSIONS = {}
@@ -80,13 +82,17 @@ async def bot(request: Request):
     if "sender" not in data:
         return {"message": "No sender detected"}
 
-    account_id = data["account"]["id"]
+    account_id = int(data["account"]["id"])
     conversation_id = data["conversation"]["id"]
     user_id = str(data["sender"]["id"])
     text = data.get("content", "") or ""
 
+    # print("🤖 Account ID:", account_id)
+    # client_params = await get_params_by_omnichannel_id(account_id)
+    # print("🤖 Omnichannel ID:", client_params)
+
     state = SESSIONS.get(user_id) or initial_state()
-    state, reply, status = handle_input(state, text)
+    state, reply, status = await handle_input(state, text, account_id)
     SESSIONS[user_id] = state
 
     # print("🤖 Bot reply:", reply)
