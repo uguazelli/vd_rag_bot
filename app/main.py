@@ -1,7 +1,16 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from app.chatwoot.handoff import perform_handoff, send_message
 from app.db.repository import get_params_by_omnichannel_id
 from app.rag_engine.rag import initial_state, handle_input
+from app.rag_engine.ingest import ingest_documents, IngestError
+from controller.folder import (
+    get_folder_file_path,
+    list_folder_files,
+    remove_folder,
+    save_folder_files,
+)
 import httpx
 import requests
 import os
@@ -16,6 +25,70 @@ CHATWOOT_API_URL = os.getenv("CHATWOOT_API_URL")
 async def health():
     print("🤖 Health check", flush=True)
     return {"message": "Status OK"}
+
+
+@app.post("/rag/docs/{folder_name}")
+async def upload_documents(folder_name: str, files: list[UploadFile] = File(...)):
+    try:
+        saved = await save_folder_files(folder_name, files)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"folder": folder_name, "files": saved}
+
+
+@app.get("/rag/docs/{folder_name}")
+async def list_documents(folder_name: str):
+    try:
+        documents = list_folder_files(folder_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Folder not found.") from exc
+    return {"folder": folder_name, "files": documents}
+
+
+@app.get("/rag/docs/{folder_name}/{file_name}")
+async def download_document(folder_name: str, file_name: str):
+    try:
+        path = get_folder_file_path(folder_name, file_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="File not found.") from exc
+    return FileResponse(path, filename=path.name)
+
+
+@app.delete("/rag/docs/{folder_name}")
+async def delete_folder(folder_name: str):
+    try:
+        deleted = remove_folder(folder_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Folder not found.") from exc
+    return {"folder": folder_name, "deleted": deleted}
+
+
+class IngestRequest(BaseModel):
+    folder: str
+    tenant_id: int
+    provider: str | None = None
+    embed_model: str | None = None
+
+
+@app.post("/rag/ingest")
+async def trigger_ingest(payload: IngestRequest):
+    try:
+        ingested, resolved_provider, resolved_model = await ingest_documents(
+            tenant_id=payload.tenant_id,
+            folder_name=payload.folder,
+            provider=payload.provider,
+            embed_model=payload.embed_model,
+        )
+    except IngestError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "tenant_id": payload.tenant_id,
+        "folder": payload.folder,
+        "provider": resolved_provider,
+        "embed_model": resolved_model,
+        "documents_ingested": ingested,
+    }
 
 @app.post("/chatwoot/webhook")
 async def webhook(request: Request):
@@ -82,17 +155,25 @@ async def bot(request: Request):
 
     print("🤖 Account ID:", account_id)
     cfg = await get_params_by_omnichannel_id(account_id)
-    # print("🤖 Configuration:", cfg)
+    print("🤖 Configuration:", cfg)
 
     # chatwoot_api_url = cfg.get("omnichannel").get('chatwoot_api_url')
     # chatwoot_bot_access_token = cfg.get("omnichannel").get('chatwoot_bot_access_token')
 
-    handoff_public_reply = cfg.get("llm_params").get('handoff_public_reply')
-    handoff_private_note = cfg.get("llm_params").get('handoff_private_note')
+    llm_params = cfg.get("llm_params") or {}
+    handoff_public_reply = llm_params.get('handoff_public_reply', "Ok, please hold on while I connect you with a human agent.")
+    handoff_private_note = llm_params.get('handoff_private_note', "Bot routed the conversation for human follow-up.")
 
     state = SESSIONS.get(user_id) or initial_state()
-    state, reply, status = await handle_input(state, text, account_id)
+    print("🤖 Handling the input ...")
+    state, reply, status = await handle_input(
+        state,
+        text,
+        tenant_id=cfg.get("id", account_id),
+        runtime_config=cfg,
+    )
     SESSIONS[user_id] = state
+
 
     # print("🤖 Bot reply:", reply)
     # print("🤖 Bot status:", status)

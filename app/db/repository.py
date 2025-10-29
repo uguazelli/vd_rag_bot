@@ -61,3 +61,25 @@ async def get_params_by_omnichannel_id(omnichannel_id: int) -> Dict[str, Any]:
 # Call this after you update the DB for that omnichannel_id
 async def invalidate_params_cache(omnichannel_id: int) -> None:
     await _cache.delete(f"client_params:{omnichannel_id}")
+
+
+async def get_params_by_tenant_id(tenant_id: int) -> Dict[str, Any]:
+    """
+    Fetch tenant configuration by tenant id (multi-tenant aware ingestion).
+    """
+    cache_key = f"tenant_params:{tenant_id}"
+    cached = await _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    def _query() -> Dict[str, Any]:
+        with get_connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                queries.SQL_GET_PARAMS_BY_TENANT_ID,
+                {"tenant_id": tenant_id},
+            )
+            return cur.fetchone() or {}
+
+    result = await anyio.to_thread.run_sync(_query)
+    await _cache.set(cache_key, result, ttl=_DEFAULT_TTL)
+    return result
