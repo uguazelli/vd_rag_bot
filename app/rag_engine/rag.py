@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from llama_index.core import Settings
+from llama_index.core.schema import NodeWithScore
 
 from .helpers import configure_llm_from_config, get_query_engine
 from .rag_handleInput import classify_user_message
@@ -30,7 +31,9 @@ async def handle_input(
         state.tenant_id = tenant_id
 
     llm = getattr(Settings, "llm", None)
+    print("🤖 Starting Intent classification...")
     intent, reason = await classify_user_message(llm, state, user_message)
+    print(f"🤖 Intent: {intent}, Reason: {reason}")
 
     state.remember("user", user_message)
 
@@ -71,25 +74,86 @@ async def handle_input(
     )
 
     response = query_engine.query(user_message)
-    answer = getattr(response, "response", None) or str(response)
-    reply = answer.strip()
-    if not reply or reply.lower() == "empty response":
-        if llm:
-            system_prompt = (
-                "You are a helpful assistant. Use the conversation history and any known facts to answer the user's latest message. "
-                "If the information was previously provided by the user in the conversation, recall it. "
-                "If you truly don't know, say so politely."
-            )
-            user_prompt = (
-                f"Conversation so far:\n{state.transcript() or '(no history)'}\n\n"
-                f"Latest user message:\n{user_message}"
-            )
+    retrieved_nodes = list(getattr(response, "source_nodes", []) or [])
+    raw_answer = (getattr(response, "response", None) or str(response or "")).strip()
+
+    print("🔎 RAG raw answer:", raw_answer)
+    if retrieved_nodes:
+        print("📄 Retrieved nodes:")
+        for idx, node in enumerate(retrieved_nodes, start=1):
             try:
-                reply = await chat_completion(llm, user_prompt, system_prompt=system_prompt)
-            except Exception:
-                reply = ""
-        if not reply:
-            reply = "I couldn't find information related to that yet."
+                snippet = node.node.get_content()
+            except AttributeError:
+                snippet = str(node)
+            print(f"  {idx}. score={getattr(node, 'score', 'n/a')}: {snippet[:200]}...")
+    else:
+        print("📄 Retrieved nodes: none")
+
+    reply = await _compose_conversational_answer(
+        llm=llm,
+        memory=state,
+        user_message=user_message,
+        nodes=retrieved_nodes,
+        llm_params=llm_params,
+        raw_answer=raw_answer,
+    )
     state.remember("assistant", reply)
 
     return state, reply, "rag"
+
+
+async def _compose_conversational_answer(
+    llm,
+    memory: MemoryState,
+    user_message: str,
+    nodes: List[NodeWithScore],
+    llm_params: Dict[str, Any],
+    raw_answer: str,
+) -> str:
+    if llm is None:
+        if raw_answer:
+            return raw_answer
+        if nodes:
+            snippets = "\n\n".join(
+                f"- {node.node.get_content()}" for node in nodes
+            )
+            return f"Aqui está o que encontrei:\n{snippets}"
+        return "I couldn't find information related to that yet."
+
+    conversation = memory.transcript() or "(no history)"
+    knowledge = "\n\n".join(
+        f"Source {idx + 1} (score={node.score:.2f}):\n{node.node.get_content()}"
+        for idx, node in enumerate(nodes)
+    ) or "No supporting documents were retrieved."
+
+    system_prompt = llm_params.get(
+        "rag_system_prompt",
+        "You are a knowledgeable support assistant. "
+        "Use both the conversation history and the provided knowledge snippets to answer the user's latest message. "
+        "If the conversation already contains the answer, rely on it. "
+        "If the knowledge snippets are helpful, weave them into the reply naturally. "
+        "If you do not know, say so politely.",
+    )
+    user_prompt = (
+        f"Conversation history:\n{conversation}\n\n"
+        f"Knowledge snippets:\n{knowledge}\n\n"
+        f"Latest user message:\n{user_message}\n\n"
+        "Compose a concise, helpful reply in the same language as the user."
+    )
+
+    try:
+        reply = await chat_completion(llm, user_prompt, system_prompt=system_prompt)
+    except Exception:
+        reply = ""
+
+    if reply.strip():
+        return reply.strip()
+
+    if raw_answer:
+        return raw_answer
+
+    if nodes:
+        fallback = "\n\n".join(node.node.get_content() for node in nodes)
+        return fallback or "I couldn't find information related to that yet."
+
+    return "I couldn't find information related to that yet."

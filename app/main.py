@@ -127,26 +127,32 @@ async def twenty_webhook(request: Request):
 async def bot(request: Request):
 
     data = await request.json()
+    # print("🤖 VD Bot webhook:", data)
+
     convo = data.get("conversation", {}) or {}
     assignee_id = (convo.get("meta", {}) or {}).get("assignee", {}) or {}
     assignee_id = assignee_id.get("id")
-    # print("🤖 VD Bot webhook:", data)
 
     # Ignore conversations assigned to someone
     if assignee_id:
+        print("🤖 Conversation is assigned to someone")
         return {"message": "Conversation is assigned to someone"}
 
     # Must be a message creation event.
     if data.get("event") != "message_created":
+        print("🤖 Not a message creation event")
         return {"message": "Not a message creation event"}
 
     # MUST be 'incoming' (from user). This reliably prevents the infinite loop.
     if data.get("message_type") != "incoming":
+        print("🤖 Not an incoming message")
         return {"message": "Not an incoming message"}
 
     # Ensure a sender exists to prevent KeyError later
     if "sender" not in data:
+        print("🤖 No sender detected")
         return {"message": "No sender detected"}
+
 
     account_id = int(data["account"]["id"])
     conversation_id = data["conversation"]["id"]
@@ -155,10 +161,9 @@ async def bot(request: Request):
 
     print("🤖 Account ID:", account_id)
     cfg = await get_params_by_omnichannel_id(account_id)
-    print("🤖 Configuration:", cfg)
-
-    # chatwoot_api_url = cfg.get("omnichannel").get('chatwoot_api_url')
-    # chatwoot_bot_access_token = cfg.get("omnichannel").get('chatwoot_bot_access_token')
+    if not cfg:
+        print("🤖 No tenant configuration found for omnichannel id", account_id)
+        return {"message": "No tenant configuration found for omnichannel id"}
 
     llm_params = cfg.get("llm_params") or {}
     handoff_public_reply = llm_params.get('handoff_public_reply', "Ok, please hold on while I connect you with a human agent.")
