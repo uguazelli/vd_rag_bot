@@ -118,4 +118,73 @@ docker compose exec app bash
 - **No knowledge base hits** – ensure you ran the ingest command and that `app/rag_engine/storage/vector_store/` exists with fresh data.
 - **Timeouts to n8n** – confirm the `WEBHOOK_URL` matches the host that Chatwoot can reach (use ngrok/public URL for remote testing).
 
-Feel free to open issues or PRs with improvements or questions.
+# Cloudflare Tunnel Quick Setup
+
+This is a simplified guide to expose local apps using Cloudflare Tunnel.
+
+## Steps
+
+1. **Install `cloudflared`**
+
+   ```bash
+   brew install cloudflare/cloudflare/cloudflared
+   cloudflared --version
+   ```
+
+2. **Login to Cloudflare**
+
+   ```bash
+   cloudflared tunnel login
+   ```
+
+   → Opens browser → select your Cloudflare account and domain.
+
+3. **Create a Tunnel**
+
+   ```bash
+   cloudflared tunnel create prod
+   ```
+
+   This outputs a `TUNNEL_UUID` and creates a JSON credentials file in `~/.cloudflared/`.
+
+4. **Create Config File**
+   Save as `~/.cloudflared/config.yml`:
+
+   ```yaml
+   tunnel: <TUNNEL_UUID>
+   credentials-file: /Users/<user>/.cloudflared/<TUNNEL_UUID>.json
+
+   ingress:
+     - hostname: vdbot.veridatapro.com
+       service: http://localhost:8080
+
+     - hostname: chatwoot.veridatapro.com
+       service: http://localhost:3000
+
+     - service: http_status:404
+   ```
+
+5. **Map DNS**
+
+   ```bash
+   cloudflared tunnel route dns <TUNNEL_UUID> vdbot.veridatapro.com
+   cloudflared tunnel route dns <TUNNEL_UUID> chatwoot.veridatapro.com
+   ```
+
+6. **Run the Tunnel**
+
+   ```bash
+   cloudflared tunnel run <TUNNEL_UUID>
+   ```
+
+7. **(Optional) Install as Service**
+   ```bash
+   sudo cloudflared service install
+   ```
+
+## Notes
+
+- Keep your apps bound to `localhost`.
+- No need to open ports 80/443.
+- Use two connectors for HA in production.
+- Free plan limits: 1,000 tunnels, 1,000 routes per tunnel, 25 connectors, 100 MB upload/request.

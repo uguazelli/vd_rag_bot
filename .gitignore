@@ -12,7 +12,6 @@ wheels/
 # env
 .env
 *.env
-.env.*
 # OS junk
 .DS_Store
 # venv
