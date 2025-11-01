@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import json
+from datetime import date
 from typing import Any, Dict
 
 import anyio
@@ -29,7 +30,6 @@ if _BACKEND == "REDIS":
     )
 else:
     _cache = Cache(Cache.MEMORY, namespace=_NAMESPACE)
-
 
 async def get_params_by_omnichannel_id(omnichannel_id: int) -> Dict[str, Any]:
     """
@@ -83,3 +83,46 @@ async def get_params_by_tenant_id(tenant_id: int) -> Dict[str, Any]:
     result = await anyio.to_thread.run_sync(_query)
     await _cache.set(cache_key, result, ttl=_DEFAULT_TTL)
     return result
+
+
+async def increment_bot_request_count(tenant_id: int, bucket: date | None = None) -> int:
+    """
+    Increment the bot usage counter for a tenant and return the day's total.
+    """
+    target_bucket = bucket or date.today()
+
+    def _increment() -> int:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    queries.SQL_INCREMENT_BOT_REQUEST_COUNT,
+                    {"tenant_id": tenant_id, "bucket_date": target_bucket},
+                )
+                new_count = cur.fetchone()[0]
+            conn.commit()
+            return new_count
+
+    return await anyio.to_thread.run_sync(_increment)
+
+
+async def get_bot_request_total(tenant_id: int, start: date, end: date | None = None) -> int:
+    """
+    Return aggregated bot requests for a tenant between start and end dates (inclusive).
+    """
+    end_date = end or start
+
+    def _fetch() -> int:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    queries.SQL_GET_BOT_REQUEST_COUNT_IN_RANGE,
+                    {
+                        "tenant_id": tenant_id,
+                        "start_date": start,
+                        "end_date": end_date,
+                    },
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row and row[0] is not None else 0
+
+    return await anyio.to_thread.run_sync(_fetch)

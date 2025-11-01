@@ -1,8 +1,14 @@
+from datetime import date
+
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from app.chatwoot.handoff import perform_handoff, send_message
-from app.db.repository import get_params_by_omnichannel_id
+from app.db.repository import (
+    get_bot_request_total,
+    get_params_by_omnichannel_id,
+    increment_bot_request_count,
+)
 from app.rag_engine.rag import initial_state, handle_input
 from app.rag_engine.ingest import ingest_documents, IngestError
 from controller.folder import (
@@ -165,7 +171,69 @@ async def bot(request: Request):
         print("🤖 No tenant configuration found for omnichannel id", account_id)
         return {"message": "No tenant configuration found for omnichannel id"}
 
+    tenant_id = int(cfg.get("id", account_id))
     llm_params = cfg.get("llm_params") or {}
+    bot_usage_today = None
+    bot_usage_month = None
+    monthly_usage = None
+    monthly_limit = None
+    monthly_limit_raw = llm_params.get("monthly_llm_request_limit")
+
+    if monthly_limit_raw is not None:
+        try:
+            monthly_limit = int(monthly_limit_raw)
+        except (TypeError, ValueError):
+            monthly_limit = None
+            print(
+                f"⚠️ Invalid monthly limit configured for tenant {tenant_id}: "
+                f"{monthly_limit_raw}"
+            )
+
+    if monthly_limit is not None and monthly_limit > 0:
+        today = date.today()
+        start_of_month = today.replace(day=1)
+        try:
+            monthly_usage = await get_bot_request_total(tenant_id, start_of_month, today)
+            bot_usage_month = monthly_usage  # store baseline before increment
+            print(
+                f"📊 Bot usage this month for tenant {tenant_id}: "
+                f"{monthly_usage}/{monthly_limit}"
+            )
+        except Exception as exc:
+            monthly_usage = None
+            bot_usage_month = None
+            print(f"⚠️ Failed to fetch monthly usage for tenant {tenant_id}: {exc}")
+        else:
+            if monthly_usage >= monthly_limit:
+                limit_message = llm_params.get(
+                    "monthly_llm_limit_reached_reply",
+                    "We have reached the automated response limit for this month. "
+                    "A human teammate will take it from here.",
+                )
+                async with httpx.AsyncClient() as client:
+                    await send_message(
+                        client=client,
+                        api_url=CHATWOOT_API_URL,
+                        access_token=CHATWOOT_BOT_ACCESS_TOKEN,
+                        account_id=account_id,
+                        conversation_id=conversation_id,
+                        content=limit_message,
+                        private=False,
+                    )
+                return {
+                    "message": "Monthly limit reached",
+                    "bot_requests_month": monthly_usage,
+                    "monthly_limit": monthly_limit,
+                }
+
+    try:
+        bot_usage_today = await increment_bot_request_count(tenant_id)
+        print(f"📈 Bot usage for tenant {tenant_id} today: {bot_usage_today}")
+        if bot_usage_month is not None:
+            bot_usage_month = bot_usage_month + 1
+    except Exception as exc:
+        print(f"⚠️ Failed to record bot usage for tenant {tenant_id}: {exc}")
+
     handoff_public_reply = llm_params.get('handoff_public_reply', "Ok, please hold on while I connect you with a human agent.")
     handoff_private_note = llm_params.get('handoff_private_note', "Bot routed the conversation for human follow-up.")
 
@@ -210,4 +278,11 @@ async def bot(request: Request):
             private=False,
         )
 
-    return {"message": "VD Bot processed"}
+    response = {"message": "VD Bot processed"}
+    if bot_usage_today is not None:
+        response["bot_requests_today"] = bot_usage_today
+    if bot_usage_month is not None:
+        response["bot_requests_month"] = bot_usage_month
+    if monthly_limit is not None:
+        response["monthly_limit"] = monthly_limit
+    return response

@@ -31,3 +31,33 @@ JOIN omnichannel AS o ON o.tenant_id = t.id
 WHERE t.id = %(tenant_id)s
 """
 
+
+SQL_CREATE_BOT_USAGE_TABLE = """
+CREATE TABLE IF NOT EXISTS bot_request_usage (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id),
+    bucket_date DATE NOT NULL,
+    request_count BIGINT NOT NULL DEFAULT 0,
+    last_request_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (tenant_id, bucket_date)
+);
+"""
+
+
+SQL_GET_BOT_REQUEST_COUNT_IN_RANGE = """
+SELECT COALESCE(SUM(request_count), 0) AS total
+FROM bot_request_usage
+WHERE tenant_id = %(tenant_id)s
+  AND bucket_date BETWEEN %(start_date)s AND %(end_date)s;
+"""
+
+
+SQL_INCREMENT_BOT_REQUEST_COUNT = """
+INSERT INTO bot_request_usage (tenant_id, bucket_date, request_count, last_request_at)
+VALUES (%(tenant_id)s, %(bucket_date)s, 1, NOW())
+ON CONFLICT (tenant_id, bucket_date)
+DO UPDATE SET
+    request_count = bot_request_usage.request_count + 1,
+    last_request_at = EXCLUDED.last_request_at
+RETURNING request_count;
+"""

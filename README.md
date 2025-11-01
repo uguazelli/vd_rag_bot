@@ -118,6 +118,13 @@ docker compose exec app bash
 - **No knowledge base hits** – ensure you ran the ingest command and that `app/rag_engine/storage/vector_store/` exists with fresh data.
 - **Timeouts to n8n** – confirm the `WEBHOOK_URL` matches the host that Chatwoot can reach (use ngrok/public URL for remote testing).
 
+## 9. Bot usage metrics
+
+- Each `/bot` request increments a per-tenant daily counter stored in the `bot_request_usage` table (created automatically on first use).
+- Columns: `tenant_id`, `bucket_date`, `request_count`, `last_request_at`.
+- The aggregated data can feed dashboards or downstream quota enforcement without additional code changes.
+- Set `monthly_llm_request_limit` inside a tenant's `llm_params` to automatically stop LLM traffic once the monthly cap is hit; the webhook replies with `monthly_llm_limit_reached_reply` (or a default notice) when the limit triggers.
+
 # Cloudflare Tunnel Quick Setup
 
 This is a simplified guide to expose local apps using Cloudflare Tunnel.
