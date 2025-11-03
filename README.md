@@ -158,24 +158,29 @@ This is a simplified guide to expose local apps using Cloudflare Tunnel.
    Save as `~/.cloudflared/config.yml`:
 
    ```yaml
-   tunnel: <TUNNEL_UUID>
-   credentials-file: /Users/<user>/.cloudflared/<TUNNEL_UUID>.json
+   tunnel: 47ac6cb5-58f5-4aa5-a6e1-339109fef4be
+   credentials-file: /Users/uguazelli/.cloudflared/47ac6cb5-58f5-4aa5-a6e1-339109fef4be.json
 
    ingress:
-     - hostname: vdbot.veridatapro.com
-       service: http://localhost:8080
+   - hostname: bot.veridatapro.com
+      service: http://localhost:8080
 
-     - hostname: chatwoot.veridatapro.com
-       service: http://localhost:3000
+   - hostname: chat.veridatapro.com
+      service: http://localhost:3000
 
-     - service: http_status:404
+   - hostname: crm.veridatapro.com
+      service: http://localhost:8000
+
+   # catch-all fallback (must be last)
+   - service: http_status:404
    ```
 
 5. **Map DNS**
 
    ```bash
-   cloudflared tunnel route dns <TUNNEL_UUID> vdbot.veridatapro.com
-   cloudflared tunnel route dns <TUNNEL_UUID> chatwoot.veridatapro.com
+   cloudflared tunnel route dns <TUNNEL_UUID> bot.veridatapro.com
+   cloudflared tunnel route dns <TUNNEL_UUID> chat.veridatapro.com
+   cloudflared tunnel route dns <TUNNEL_UUID> crm.veridatapro.com
    ```
 
 6. **Run the Tunnel**
