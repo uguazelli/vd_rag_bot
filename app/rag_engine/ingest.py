@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 from app.db.connection import resolve_sqlalchemy_urls
 from app.db.repository import get_params_by_tenant_id
-from controller.folder import STORAGE_ROOT
+from controller.rag_docs import STORAGE_ROOT
 
 
 class IngestError(RuntimeError):

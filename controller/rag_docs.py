@@ -1,4 +1,4 @@
-"""Folder-level document management utilities."""
+"""Document management controller functions."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import List, Sequence
 
 import anyio
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 
 class FolderControllerError(RuntimeError):
@@ -64,7 +65,6 @@ async def save_folder_files(folder_name: str, files: Sequence[UploadFile]) -> Li
         safe_filename = _validate_component(filename, label="File")
         data = await upload.read()
         await anyio.to_thread.run_sync(_write_file_bytes, folder, safe_filename, data)
-        # Reset stream so FastAPI can handle cleanup correctly.
         await upload.seek(0)
         saved.append(safe_filename)
 
@@ -111,6 +111,38 @@ def remove_folder(folder_name: str) -> List[str]:
     return sorted(deleted_files)
 
 
+async def upload_documents(folder_name: str, files: list[UploadFile]):
+    try:
+        saved = await save_folder_files(folder_name, files)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"folder": folder_name, "files": saved}
+
+
+def list_documents(folder_name: str):
+    try:
+        documents = list_folder_files(folder_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Folder not found.") from exc
+    return {"folder": folder_name, "files": documents}
+
+
+def download_document(folder_name: str, file_name: str) -> FileResponse:
+    try:
+        path = get_folder_file_path(folder_name, file_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="File not found.") from exc
+    return FileResponse(path, filename=path.name)
+
+
+def delete_folder(folder_name: str):
+    try:
+        deleted = remove_folder(folder_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Folder not found.") from exc
+    return {"folder": folder_name, "deleted": deleted}
+
+
 __all__ = [
     "FolderControllerError",
     "STORAGE_ROOT",
@@ -118,4 +150,8 @@ __all__ = [
     "list_folder_files",
     "get_folder_file_path",
     "remove_folder",
+    "upload_documents",
+    "list_documents",
+    "download_document",
+    "delete_folder",
 ]
