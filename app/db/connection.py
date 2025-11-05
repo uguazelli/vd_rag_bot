@@ -7,11 +7,11 @@ import psycopg
 
 
 def _database_dsn() -> str:
-    host = os.getenv("DB_HOST", "host.docker.internal")
-    port = os.getenv("DB_PORT", "5433")
-    db = os.getenv("DB_NAME", "vd")
-    user = os.getenv("DB_USER", "vd")
-    pwd = os.getenv("DB_PASSWORD", "vd")
+    host = os.getenv("POSTGRES_HOST", "host.docker.internal")
+    port = os.getenv("POSTGRES_PORT", "5433")
+    db = os.getenv("POSTGRES_DATABASE", "vd")
+    user = os.getenv("POSTGRES_USERNAME", "vd")
+    pwd = os.getenv("POSTGRES_PASSWORD", "vd")
     return f"postgresql://{user}:{pwd}@{host}:{port}/{db}"
 
 

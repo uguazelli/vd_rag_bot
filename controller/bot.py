@@ -1,7 +1,6 @@
 """Chatwoot bot controller logic."""
 
 from datetime import date
-import os
 
 import httpx
 
@@ -15,9 +14,7 @@ from app.rag_engine.rag import handle_input, initial_state
 
 
 SESSIONS: dict[str, dict] = {}
-HANDOFF_PRIORITY = "high"
-CHATWOOT_BOT_ACCESS_TOKEN = os.getenv("CHATWOOT_BOT_ACCESS_TOKEN")
-CHATWOOT_API_URL = os.getenv("CHATWOOT_API_URL")
+DEFAULT_HANDOFF_PRIORITY = "high"
 
 
 async def process_bot_request(data: dict):
@@ -46,19 +43,37 @@ async def process_bot_request(data: dict):
     user_id = str(data["sender"]["id"])
     text = data.get("content", "") or ""
 
-    print("🤖 Account ID:", account_id)
     cfg = await get_params_by_omnichannel_id(account_id)
+    print("🤖 Tenant configuration for omnichannel id", account_id, cfg)
+
     if not cfg:
         print("🤖 No tenant configuration found for omnichannel id", account_id)
         return {"message": "No tenant configuration found for omnichannel id"}
 
     tenant_id = int(cfg.get("id", account_id))
     llm_params = cfg.get("llm_params") or {}
+    omnichannel_params = cfg.get("omnichannel") or {}
     bot_usage_today = None
     bot_usage_month = None
     monthly_usage = None
     monthly_limit = None
     monthly_limit_raw = llm_params.get("monthly_llm_request_limit")
+    chatwoot_api_url = omnichannel_params.get("chatwoot_api_url")
+    chatwoot_bot_access_token = omnichannel_params.get("chatwoot_bot_access_token")
+
+    if not chatwoot_api_url:
+        print(
+            f"⚠️ Chatwoot API URL not configured for tenant {tenant_id} "
+            f"(omnichannel {account_id})"
+        )
+        return {"message": "Chatwoot API URL not configured"}
+
+    if not chatwoot_bot_access_token:
+        print(
+            f"⚠️ Chatwoot access token not configured for tenant {tenant_id} "
+            f"(omnichannel {account_id})"
+        )
+        return {"message": "Chatwoot access token not configured"}
 
     if monthly_limit_raw is not None:
         try:
@@ -94,8 +109,8 @@ async def process_bot_request(data: dict):
                 async with httpx.AsyncClient() as client:
                     await send_message(
                         client=client,
-                        api_url=CHATWOOT_API_URL,
-                        access_token=CHATWOOT_BOT_ACCESS_TOKEN,
+                        api_url=chatwoot_api_url,
+                        access_token=chatwoot_bot_access_token,
                         account_id=account_id,
                         conversation_id=conversation_id,
                         content=limit_message,
@@ -123,6 +138,7 @@ async def process_bot_request(data: dict):
         "handoff_private_note",
         "Bot routed the conversation for human follow-up.",
     )
+    handoff_priority = llm_params.get("handoff_priority", DEFAULT_HANDOFF_PRIORITY)
 
     state = SESSIONS.get(user_id) or initial_state()
     print("🤖 Handling the input ...")
@@ -140,18 +156,18 @@ async def process_bot_request(data: dict):
                 client=client,
                 account_id=account_id,
                 conversation_id=conversation_id,
-                api_url=CHATWOOT_API_URL,
-                access_token=CHATWOOT_BOT_ACCESS_TOKEN,
+                api_url=chatwoot_api_url,
+                access_token=chatwoot_bot_access_token,
                 public_reply=handoff_public_reply,
                 private_note=handoff_private_note,
-                priority=HANDOFF_PRIORITY,
+                priority=handoff_priority,
             )
             return {"message": "Routing to human agent"}
 
         await send_message(
             client=client,
-            api_url=CHATWOOT_API_URL,
-            access_token=CHATWOOT_BOT_ACCESS_TOKEN,
+            api_url=chatwoot_api_url,
+            access_token=chatwoot_bot_access_token,
             account_id=account_id,
             conversation_id=conversation_id,
             content=reply,

@@ -1,10 +1,10 @@
-name: vd-bot
+name: veriops
 
 services:
   app:
     build:
       context: .
-    container_name: vd_rag_bot_app
+    container_name: veriopsbot
     command:
       - uv
       - run
@@ -37,7 +37,7 @@ services:
 
   n8n:
     image: n8nio/n8n:latest
-    container_name: vd_n8n
+    container_name: veriopsn8n
     restart: unless-stopped
     ports:
       - "5678:5678"
