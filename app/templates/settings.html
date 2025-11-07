@@ -1,0 +1,199 @@
+{% extends "layout.html" %}
+
+{% block title %}Tenant Settings · VeriOps{% endblock %}
+
+{% block header %}Tenant Settings{% endblock %}
+
+{% block header_actions %}
+<span class="text-white-50 small me-3">{{ user_email }}</span>
+<a href="/documents" class="btn btn-outline-light btn-sm">Documents</a>
+<a href="/logout" class="btn btn-outline-light btn-sm">Log out</a>
+{% endblock %}
+
+{% block content %}
+    {% if message %}
+        <div class="alert alert-success">{{ message }}</div>
+    {% endif %}
+    {% if errors %}
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <form method="post" action="/settings" class="d-grid gap-4">
+        <div class="accordion" id="settingsAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="heading-llm">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-llm" aria-expanded="true" aria-controls="collapse-llm">
+                        LLM Provider
+                    </button>
+                </h2>
+                <div id="collapse-llm" class="accordion-collapse collapse show" aria-labelledby="heading-llm">
+                    <div class="accordion-body">
+                        <div class="row g-3">
+                            {% set provider_current = form_values.llm_name %}
+                            <div class="col-md-6">
+                                <label for="llm_name" class="form-label">Provider name</label>
+                                <select id="llm_name" name="llm_name" class="form-select" required>
+                                    <option value="" disabled {% if not provider_current %}selected{% endif %}>Select provider</option>
+                                    {% for option in provider_options %}
+                                        <option value="{{ option }}" {% if option == provider_current %}selected{% endif %}>
+                                            {{ option }}
+                                        </option>
+                                    {% endfor %}
+                                    {% if provider_current and provider_current not in provider_options %}
+                                        <option value="{{ provider_current }}" selected>{{ provider_current }}</option>
+                                    {% endif %}
+                                </select>
+                            </div>
+                            {% set model_current = form_values.llm_model_answer %}
+                            <div class="col-md-6">
+                                <label for="llm_model_answer" class="form-label">Model</label>
+                                <select id="llm_model_answer" name="llm_model_answer" class="form-select" required>
+                                    <option value="" disabled {% if not model_current %}selected{% endif %}>Select model</option>
+                                    {% for option in model_options %}
+                                        <option value="{{ option }}" {% if option == model_current %}selected{% endif %}>
+                                            {{ option }}
+                                        </option>
+                                    {% endfor %}
+                                    {% if model_current and model_current not in model_options %}
+                                        <option value="{{ model_current }}" selected>{{ model_current }}</option>
+                                    {% endif %}
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label for="llm_api_key" class="form-label">API key</label>
+                                <input id="llm_api_key" name="llm_api_key" value="{{ form_values.llm_api_key }}" required class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="llm_top_k" class="form-label">Top K</label>
+                                <input id="llm_top_k" name="llm_top_k" value="{{ form_values.llm_top_k }}" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="llm_temperature" class="form-label">Temperature</label>
+                                <input id="llm_temperature" name="llm_temperature" value="{{ form_values.llm_temperature }}" class="form-control">
+                            </div>
+                            {% set priority_current = form_values.llm_handoff_priority %}
+                            <div class="col-md-6">
+                                <label for="llm_handoff_priority" class="form-label">Handoff priority</label>
+                                <select id="llm_handoff_priority" name="llm_handoff_priority" class="form-select">
+                                    <option value="" {% if not priority_current %}selected{% endif %}></option>
+                                    {% for option in handoff_priorities %}
+                                        <option value="{{ option }}" {% if option == priority_current %}selected{% endif %}>
+                                            {{ option }}
+                                        </option>
+                                    {% endfor %}
+                                    {% if priority_current and priority_current not in handoff_priorities %}
+                                        <option value="{{ priority_current }}" selected>{{ priority_current }}</option>
+                                    {% endif %}
+                                </select>
+                            </div>
+                            {% set embed_current = form_values.llm_openai_embed_model %}
+                            <div class="col-md-6">
+                                <label for="llm_openai_embed_model" class="form-label">Embedding model</label>
+                                <select id="llm_openai_embed_model" name="llm_openai_embed_model" class="form-select">
+                                    <option value="" {% if not embed_current %}selected{% endif %}></option>
+                                    {% for option in embed_options %}
+                                        <option value="{{ option }}" {% if option == embed_current %}selected{% endif %}>
+                                            {{ option }}
+                                        </option>
+                                    {% endfor %}
+                                    {% if embed_current and embed_current not in embed_options %}
+                                        <option value="{{ embed_current }}" selected>{{ embed_current }}</option>
+                                    {% endif %}
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label for="llm_handoff_public_reply" class="form-label">Handoff public reply</label>
+                                <textarea id="llm_handoff_public_reply" name="llm_handoff_public_reply" rows="3" class="form-control">{{ form_values.llm_handoff_public_reply }}</textarea>
+                            </div>
+                            <div class="col-12">
+                                <label for="llm_handoff_private_note" class="form-label">Handoff private note</label>
+                                <textarea id="llm_handoff_private_note" name="llm_handoff_private_note" rows="3" class="form-control">{{ form_values.llm_handoff_private_note }}</textarea>
+                            </div>
+                            {% set cross_current = form_values.llm_rag_cross_encoder_model %}
+                            <div class="col-md-6">
+                                <label for="llm_rag_cross_encoder_model" class="form-label">Cross encoder model</label>
+                                <select id="llm_rag_cross_encoder_model" name="llm_rag_cross_encoder_model" class="form-select">
+                                    <option value="" {% if not cross_current %}selected{% endif %}></option>
+                                    {% for option in cross_encoder_options %}
+                                        <option value="{{ option }}" {% if option == cross_current %}selected{% endif %}>
+                                            {{ option }}
+                                        </option>
+                                    {% endfor %}
+                                    {% if cross_current and cross_current not in cross_encoder_options %}
+                                        <option value="{{ cross_current }}" selected>{{ cross_current }}</option>
+                                    {% endif %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="llm_monthly_limit" class="form-label">Monthly LLM request limit</label>
+                                <input id="llm_monthly_limit" name="llm_monthly_limit" value="{{ form_values.llm_monthly_limit }}" placeholder="Leave blank for no limit" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="heading-crm">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-crm" aria-expanded="false" aria-controls="collapse-crm">
+                        CRM
+                    </button>
+                </h2>
+                <div id="collapse-crm" class="accordion-collapse collapse" aria-labelledby="heading-crm">
+                    <div class="accordion-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="crm_url" class="form-label">API URL</label>
+                                <input id="crm_url" name="crm_url" value="{{ form_values.crm_url }}" required class="form-control">
+                            </div>
+                            <div class="col-12">
+                                <label for="crm_token" class="form-label">API token</label>
+                                <input id="crm_token" name="crm_token" value="{{ form_values.crm_token }}" required class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="heading-chatwoot">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-chatwoot" aria-expanded="false" aria-controls="collapse-chatwoot">
+                        Chatwoot
+                    </button>
+                </h2>
+                <div id="collapse-chatwoot" class="accordion-collapse collapse" aria-labelledby="heading-chatwoot">
+                    <div class="accordion-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="chatwoot_api_url" class="form-label">API URL</label>
+                                <input id="chatwoot_api_url" name="chatwoot_api_url" value="{{ form_values.chatwoot_api_url }}" required class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="chatwoot_account_id" class="form-label">Account ID</label>
+                                <input id="chatwoot_account_id" name="chatwoot_account_id" value="{{ form_values.chatwoot_account_id }}" required class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="chatwoot_api_access_token" class="form-label">API access token</label>
+                                <input id="chatwoot_api_access_token" name="chatwoot_api_access_token" value="{{ form_values.chatwoot_api_access_token }}" required class="form-control">
+                            </div>
+                            <div class="col-12">
+                                <label for="chatwoot_bot_access_token" class="form-label">Bot access token</label>
+                                <input id="chatwoot_bot_access_token" name="chatwoot_bot_access_token" value="{{ form_values.chatwoot_bot_access_token }}" required class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end mt-2">
+            <button type="submit" class="btn btn-primary">Save changes</button>
+        </div>
+    </form>
+{% endblock %}

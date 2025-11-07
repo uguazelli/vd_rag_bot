@@ -84,6 +84,12 @@ def list_folder_files(folder_name: str) -> List[str]:
     return sorted(p.name for p in folder.iterdir() if p.is_file())
 
 
+def list_all_folders() -> List[str]:
+    if not STORAGE_ROOT.exists() or not STORAGE_ROOT.is_dir():
+        return []
+    return sorted(path.name for path in STORAGE_ROOT.iterdir() if path.is_dir())
+
+
 def get_folder_file_path(folder_name: str, file_name: str) -> Path:
     folder = _folder_path(folder_name)
     if not folder.exists() or not folder.is_dir():
@@ -148,6 +154,7 @@ __all__ = [
     "STORAGE_ROOT",
     "save_folder_files",
     "list_folder_files",
+    "list_all_folders",
     "get_folder_file_path",
     "remove_folder",
     "upload_documents",

@@ -63,6 +63,10 @@ async def invalidate_params_cache(omnichannel_id: int) -> None:
     await _cache.delete(f"client_params:{omnichannel_id}")
 
 
+async def invalidate_tenant_params_cache(tenant_id: int) -> None:
+    await _cache.delete(f"tenant_params:{tenant_id}")
+
+
 async def get_params_by_tenant_id(tenant_id: int) -> Dict[str, Any]:
     """
     Fetch tenant configuration by tenant id (multi-tenant aware ingestion).
@@ -126,3 +130,111 @@ async def get_bot_request_total(tenant_id: int, start: date, end: date | None = 
                 return int(row[0]) if row and row[0] is not None else 0
 
     return await anyio.to_thread.run_sync(_fetch)
+
+
+async def get_user_by_email(email: str) -> Dict[str, Any]:
+    """
+    Fetch a single user record by email. Returns {} when not found.
+    """
+
+    def _query() -> Dict[str, Any]:
+        with get_connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                queries.SQL_GET_USER_BY_EMAIL,
+                {"email": email},
+            )
+            return cur.fetchone() or {}
+
+    return await anyio.to_thread.run_sync(_query)
+
+
+async def create_user(
+    tenant_id: int,
+    email: str,
+    password_hash: str,
+) -> Dict[str, Any]:
+    """
+    Insert a new user row and return the created record.
+    """
+
+    def _insert() -> Dict[str, Any]:
+        with get_connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                queries.SQL_INSERT_USER,
+                {
+                    "tenant_id": tenant_id,
+                    "email": email,
+                    "password_hash": password_hash,
+                },
+            )
+            row = cur.fetchone() or {}
+            conn.commit()
+            return row
+
+    return await anyio.to_thread.run_sync(_insert)
+
+
+async def update_llm_settings(
+    llm_id: int,
+    params: Dict[str, Any],
+) -> None:
+    """
+    Persist new LLM settings for a tenant.
+    """
+
+    def _update() -> None:
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                queries.SQL_UPDATE_LLM_SETTINGS,
+                {
+                    "llm_id": llm_id,
+                    "params": json.dumps(params),
+                },
+            )
+            conn.commit()
+
+    await anyio.to_thread.run_sync(_update)
+
+
+async def update_crm_settings(
+    crm_id: int,
+    params: Dict[str, Any],
+) -> None:
+    """
+    Persist new CRM settings for a tenant.
+    """
+
+    def _update() -> None:
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                queries.SQL_UPDATE_CRM_SETTINGS,
+                {
+                    "crm_id": crm_id,
+                    "params": json.dumps(params),
+                },
+            )
+            conn.commit()
+
+    await anyio.to_thread.run_sync(_update)
+
+
+async def update_omnichannel_settings(
+    omnichannel_id: int,
+    params: Dict[str, Any],
+) -> None:
+    """
+    Persist new omnichannel (Chatwoot) settings for a tenant.
+    """
+
+    def _update() -> None:
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                queries.SQL_UPDATE_OMNICHANNEL_SETTINGS,
+                {
+                    "omnichannel_id": omnichannel_id,
+                    "params": json.dumps(params),
+                },
+            )
+            conn.commit()
+
+    await anyio.to_thread.run_sync(_update)

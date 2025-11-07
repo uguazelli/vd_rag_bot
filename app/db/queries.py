@@ -61,3 +61,38 @@ DO UPDATE SET
     last_request_at = EXCLUDED.last_request_at
 RETURNING request_count;
 """
+
+
+SQL_GET_USER_BY_EMAIL = """
+SELECT id, tenant_id, email, password_hash
+FROM users
+WHERE email = %(email)s
+"""
+
+
+SQL_UPDATE_LLM_SETTINGS = """
+UPDATE llm
+SET params = %(params)s
+WHERE id = %(llm_id)s
+"""
+
+
+SQL_UPDATE_CRM_SETTINGS = """
+UPDATE crm
+SET params = %(params)s
+WHERE id = %(crm_id)s
+"""
+
+
+SQL_UPDATE_OMNICHANNEL_SETTINGS = """
+UPDATE omnichannel
+SET params = %(params)s
+WHERE id = %(omnichannel_id)s
+"""
+
+
+SQL_INSERT_USER = """
+INSERT INTO users (tenant_id, email, password_hash, modified_at)
+VALUES (%(tenant_id)s, %(email)s, %(password_hash)s, NOW())
+RETURNING id, tenant_id, email
+"""

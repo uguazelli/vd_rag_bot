@@ -1,9 +1,20 @@
-from fastapi import FastAPI, File, Request, UploadFile
+from pathlib import Path
 
-from controller import rag_docs, rag_ingest, webhooks
-from controller import bot as bot_controller
+from fastapi import FastAPI, File, Request, UploadFile
+from fastapi.staticfiles import StaticFiles
+
+from .controller import rag_docs, rag_ingest, webhooks
+from .controller import bot as bot_controller
+from .web.views import router as web_router
 
 app = FastAPI()
+
+app.include_router(web_router)
+
+static_dir = Path(__file__).resolve().parent / "static"
+static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 
 @app.get("/health")
 async def health():
@@ -34,6 +45,7 @@ async def delete_folder(folder_name: str):
 @app.post("/rag/ingest")
 async def trigger_ingest(payload: rag_ingest.IngestRequest):
     return await rag_ingest.trigger_ingest(payload)
+
 
 @app.post("/chatwoot/webhook")
 async def webhook(request: Request):

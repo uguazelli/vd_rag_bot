@@ -1,0 +1,138 @@
+{% extends "layout.html" %}
+
+{% block title %}Documents · VeriOps{% endblock %}
+
+{% block header %}Knowledge Base{% endblock %}
+
+{% block header_actions %}
+<span class="text-white-50 small me-3">{{ user_email }}</span>
+<a href="/settings" class="btn btn-outline-light btn-sm">Settings</a>
+<a href="/logout" class="btn btn-outline-light btn-sm">Log out</a>
+{% endblock %}
+
+{% block content %}
+    {% if message %}
+        <div class="alert alert-success">{{ message }}</div>
+    {% endif %}
+    {% if errors %}
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h2 class="h5 mb-0">Upload Documents</h2>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="/documents/upload" enctype="multipart/form-data" class="d-grid gap-3">
+                        <div>
+                            <label for="upload_folder" class="form-label">Folder name</label>
+                            <input id="upload_folder" name="folder_name" value="{{ selected_folder or '' }}" required class="form-control">
+                        </div>
+                        <div>
+                            <label for="upload_files" class="form-label">Files</label>
+                            <input id="upload_files" name="files" type="file" multiple required class="form-control">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Upload</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h2 class="h5 mb-0">Vector Store Ingestion</h2>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="/documents/ingest" class="d-grid gap-3">
+                        <div>
+                            <label for="ingest_folder" class="form-label">Folder</label>
+                            <select id="ingest_folder" name="folder" class="form-select" required>
+                                <option value="" disabled {% if not selected_folder %}selected{% endif %}>Select a folder</option>
+                                {% for entry in folder_entries %}
+                                    <option value="{{ entry.name }}" {% if entry.name == selected_folder %}selected{% endif %}>
+                                        {{ entry.name }} ({{ entry.file_count }} file{% if entry.file_count != 1 %}s{% endif %})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="ingest_provider" class="form-label">Provider (optional)</label>
+                                <input id="ingest_provider" name="provider" value="{{ ingest_defaults.provider }}" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="ingest_embed_model" class="form-label">Embedding model (optional)</label>
+                                <input id="ingest_embed_model" name="embed_model" value="{{ ingest_defaults.embed_model }}" class="form-control">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Ingest Folder</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h2 class="h5 mb-0">Stored Folders</h2>
+                </div>
+                <div class="card-body">
+                    {% if folder_entries %}
+                        <ul class="list-group list-group-flush">
+                            {% for entry in folder_entries %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <a href="/documents?folder={{ entry.name }}" class="fw-semibold">{{ entry.name }}</a>
+                                        <span class="text-muted ms-2 small">
+                                            {{ entry.file_count }} file{% if entry.file_count != 1 %}s{% endif %}
+                                        </span>
+                                    </div>
+                                    <form method="post" action="/documents/delete" onsubmit="return confirm('Delete folder {{ entry.name }}?');">
+                                        <input type="hidden" name="folder_name" value="{{ entry.name }}">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+                                    </form>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted mb-0">No folders found yet. Upload documents to get started.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h2 class="h5 mb-0">Files{% if selected_folder %} in “{{ selected_folder }}”{% endif %}</h2>
+                </div>
+                <div class="card-body">
+                    {% if selected_folder %}
+                        {% if selected_files %}
+                            <ul class="list-group list-group-flush">
+                                {% for file in selected_files %}
+                                    <li class="list-group-item">
+                                        <a href="/rag/docs/{{ selected_folder }}/{{ file }}" target="_blank">{{ file }}</a>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted mb-0">No files uploaded yet.</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-muted mb-0">Select a folder to view its files.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
