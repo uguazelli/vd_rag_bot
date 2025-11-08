@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import List, Sequence
@@ -36,6 +37,24 @@ def _resolve_storage_root() -> Path:
 
 
 STORAGE_ROOT: Path = _resolve_storage_root()
+_CLIENT_FOLDER_PREFIX = "client"
+_SLUG_REGEX = re.compile(r"[^a-z0-9]+")
+
+
+def tenant_folder_name(tenant_id: int, *, tenant_email: str | None = None) -> str:
+    """
+    Determine the canonical folder name for a tenant.
+
+    Includes a sanitized version of the tenant's email domain (when available)
+    plus the tenant id to guarantee uniqueness.
+    """
+    domain = ""
+    if tenant_email and "@" in tenant_email:
+        domain = tenant_email.split("@", 1)[1]
+    slug = _SLUG_REGEX.sub("-", domain.lower()).strip("-") if domain else ""
+    if slug:
+        return f"{_CLIENT_FOLDER_PREFIX}-{slug}-{tenant_id}"
+    return f"{_CLIENT_FOLDER_PREFIX}-{tenant_id}"
 
 
 def _validate_component(name: str, *, label: str) -> str:
@@ -50,6 +69,12 @@ def _validate_component(name: str, *, label: str) -> str:
 def _folder_path(folder_name: str) -> Path:
     safe_name = _validate_component(folder_name, label="Folder")
     folder = STORAGE_ROOT / safe_name
+    return folder
+
+
+def ensure_folder(folder_name: str) -> Path:
+    folder = _folder_path(folder_name)
+    folder.mkdir(parents=True, exist_ok=True)
     return folder
 
 
@@ -117,6 +142,25 @@ def remove_folder(folder_name: str) -> List[str]:
     return sorted(deleted_files)
 
 
+def delete_files(folder_name: str, file_names: Sequence[str]) -> List[str]:
+    folder = _folder_path(folder_name)
+    if not folder.exists() or not folder.is_dir():
+        raise FileNotFoundError(f"Folder '{folder_name}' was not found.")
+
+    deleted: List[str] = []
+    for name in file_names:
+        if not name:
+            continue
+        safe_filename = _validate_component(name, label="File")
+        target = folder / safe_filename
+        if not target.exists() or not target.is_file():
+            continue
+        target.unlink()
+        deleted.append(safe_filename)
+
+    return sorted(deleted)
+
+
 async def upload_documents(folder_name: str, files: list[UploadFile]):
     try:
         saved = await save_folder_files(folder_name, files)
@@ -152,10 +196,13 @@ def delete_folder(folder_name: str):
 __all__ = [
     "FolderControllerError",
     "STORAGE_ROOT",
+    "tenant_folder_name",
+    "ensure_folder",
     "save_folder_files",
     "list_folder_files",
     "list_all_folders",
     "get_folder_file_path",
+    "delete_files",
     "remove_folder",
     "upload_documents",
     "list_documents",

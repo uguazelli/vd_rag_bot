@@ -9,6 +9,11 @@ from typing import Dict
 
 import anyio
 from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
+from llama_index.core.vector_stores.types import (
+    FilterOperator,
+    MetadataFilter,
+    MetadataFilters,
+)
 from llama_index.vector_stores.postgres import PGVectorStore
 
 try:
@@ -44,6 +49,8 @@ DEFAULT_EMBED_MODELS: Dict[str, str] = {
     "gemini": "models/text-embedding-004",
 }
 
+SHARED_VECTOR_TABLE = "rag_vectors"
+
 
 @dataclass(frozen=True)
 class IngestConfig:
@@ -54,6 +61,18 @@ class IngestConfig:
     embed_model: str
     table_name: str
     schema_name: str
+
+
+def _tenant_metadata_filter(tenant_id: int) -> MetadataFilters:
+    return MetadataFilters(
+        filters=[
+            MetadataFilter(
+                key="tenant_id",
+                value=str(tenant_id),
+                operator=FilterOperator.EQ,
+            )
+        ]
+    )
 
 
 def _parse_params(raw: object) -> Dict[str, object]:
@@ -109,6 +128,12 @@ def _ingest_sync(config: IngestConfig) -> int:
     documents = SimpleDirectoryReader(str(docs_dir)).load_data()
     if not documents:
         raise IngestError(f"No documents found in folder '{config.folder_name}'.")
+    tenant_metadata = _tenant_metadata_filter(config.tenant_id)
+    for doc in documents:
+        metadata = dict(doc.metadata or {})
+        metadata["tenant_id"] = str(config.tenant_id)
+        metadata["folder_name"] = config.folder_name
+        doc.metadata = metadata
 
     sync_url, async_url = resolve_sqlalchemy_urls()
     vector_store = PGVectorStore.from_params(
@@ -117,8 +142,9 @@ def _ingest_sync(config: IngestConfig) -> int:
         table_name=config.table_name,
         schema_name=config.schema_name,
         embed_dim=embed_dim,
+        indexed_metadata_keys={("tenant_id", "text")},
     )
-    vector_store.clear()
+    vector_store.delete_nodes(filters=tenant_metadata)
 
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
     VectorStoreIndex.from_documents(
@@ -167,8 +193,8 @@ async def ingest_documents(
             f"No embedding model configured for provider '{provider_name}'."
         )
 
-    table_name = llm_params.get("rag_table_name") or f"tenant_{tenant_id}_vectors"
-    schema_name = llm_params.get("rag_schema_name", "public")
+    schema_name = llm_params.get("rag_schema_name") or "public"
+    table_name = SHARED_VECTOR_TABLE
 
     config = IngestConfig(
         tenant_id=tenant_id,
@@ -176,7 +202,7 @@ async def ingest_documents(
         provider=provider_name,
         api_key=str(api_key),
         embed_model=str(embed_model_name),
-        table_name=str(table_name),
+        table_name=table_name,
         schema_name=str(schema_name),
     )
     ingested = await anyio.to_thread.run_sync(_ingest_sync, config)

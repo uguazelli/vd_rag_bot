@@ -18,7 +18,7 @@ from llama_index.vector_stores.postgres import PGVectorStore
 from app.db.connection import resolve_sqlalchemy_urls
 from app.db.repository import get_params_by_omnichannel_id
 
-from .ingest import EMBED_DIMENSIONS
+from .ingest import EMBED_DIMENSIONS, SHARED_VECTOR_TABLE
 
 DEFAULT_MODEL_ANSWER = "gpt-4o-mini"
 DEFAULT_EMBED_MODEL = "text-embedding-3-small"
@@ -93,13 +93,20 @@ def _resolve_embed_dim(embed_model: str) -> int:
     return EMBED_DIMENSIONS.get(DEFAULT_EMBED_MODEL, 1536)
 
 
+def _tenant_query_customizer(tenant_id: int):
+    def _customize(stmt, table, **kwargs):
+        return stmt.where(table.metadata_["tenant_id"].astext == str(tenant_id))
+
+    return _customize
+
+
 def _vector_store_from_config(
     tenant_id: int,
     llm_params: Dict[str, Any],
     embed_model: str,
 ) -> PGVectorStore:
-    table_name = llm_params.get("rag_table_name") or f"tenant_{tenant_id}_vectors"
-    schema_name = llm_params.get("rag_schema_name", "public")
+    table_name = SHARED_VECTOR_TABLE
+    schema_name = llm_params.get("rag_schema_name") or "public"
     embed_dim = _resolve_embed_dim(embed_model)
     sync_url, async_url = resolve_sqlalchemy_urls()
     return PGVectorStore.from_params(
@@ -108,6 +115,8 @@ def _vector_store_from_config(
         table_name=table_name,
         schema_name=schema_name,
         embed_dim=embed_dim,
+        indexed_metadata_keys={("tenant_id", "text")},
+        customize_query_fn=_tenant_query_customizer(tenant_id),
     )
 
 

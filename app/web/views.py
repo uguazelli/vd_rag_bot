@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mimetypes
 import secrets
 from pathlib import Path
 from typing import Any, Dict
@@ -93,6 +94,39 @@ def _issue_session_response(
         samesite="lax",
     )
     return response
+
+
+def _client_folder_name(session: Dict[str, Any]) -> str:
+    return rag_docs.tenant_folder_name(
+        tenant_id=session["tenant_id"],
+        tenant_email=session.get("email"),
+    )
+
+
+def _file_type_label(file_name: str) -> str:
+    mime, _ = mimetypes.guess_type(file_name)
+    if mime:
+        _, _, subtype = mime.partition("/")
+        if subtype:
+            return subtype.replace("-", " ").upper()
+        return mime.upper()
+    suffix = Path(file_name).suffix.lstrip(".")
+    if suffix:
+        return suffix.upper()
+    return "Unknown"
+
+
+def _build_file_rows(folder_name: str, file_names: list[str]) -> list[Dict[str, str]]:
+    rows: list[Dict[str, str]] = []
+    for file_name in file_names:
+        rows.append(
+            {
+                "name": file_name,
+                "type": _file_type_label(file_name),
+                "url": f"/rag/docs/{folder_name}/{file_name}",
+            }
+        )
+    return rows
 
 
 def _build_form_values(
@@ -574,48 +608,14 @@ async def documents_page(request: Request):
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
-    tenant_config = await get_params_by_tenant_id(session["tenant_id"])
-    llm_params = tenant_config.get("llm_params") or {}
-    ingest_defaults = {
-        "provider": str(
-            llm_params.get("name")
-            or llm_params.get("provider")
-            or ""
-        ),
-        "embed_model": str(
-            llm_params.get("openai_embed_model")
-            or llm_params.get("gemini_embed_model")
-            or llm_params.get("embed_model")
-            or ""
-        ),
-    }
+    client_folder = _client_folder_name(session)
+    rag_docs.ensure_folder(client_folder)
+    try:
+        client_files = rag_docs.list_folder_files(client_folder)
+    except FileNotFoundError:
+        client_files = []
 
-    folder_names = rag_docs.list_all_folders()
-    folder_entries: list[dict[str, Any]] = []
-    for folder in folder_names:
-        try:
-            files = rag_docs.list_folder_files(folder)
-        except FileNotFoundError:
-            continue
-        folder_entries.append(
-            {
-                "name": folder,
-                "file_count": len(files),
-            }
-        )
-
-    selected_folder = request.query_params.get("folder")
-    if selected_folder and selected_folder not in {entry["name"] for entry in folder_entries}:
-        selected_folder = None
-    if not selected_folder and folder_entries:
-        selected_folder = folder_entries[0]["name"]
-
-    selected_files: list[str] = []
-    if selected_folder:
-        try:
-            selected_files = rag_docs.list_folder_files(selected_folder)
-        except FileNotFoundError:
-            selected_files = []
+    file_rows = _build_file_rows(client_folder, client_files)
 
     message = request.query_params.get("message")
     error_param = request.query_params.get("error")
@@ -626,12 +626,10 @@ async def documents_page(request: Request):
         {
             "request": request,
             "user_email": session["email"],
-            "folder_entries": folder_entries,
-            "selected_folder": selected_folder,
-            "selected_files": selected_files,
+            "client_folder": client_folder,
+            "file_rows": file_rows,
             "message": message,
             "errors": errors,
-            "ingest_defaults": ingest_defaults,
         },
     )
 
@@ -639,7 +637,6 @@ async def documents_page(request: Request):
 @router.post("/documents/upload")
 async def documents_upload(
     request: Request,
-    folder_name: str = Form(...),
     files: list[UploadFile] = File(...),
 ):
     session = _get_session(request)
@@ -649,29 +646,30 @@ async def documents_upload(
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
+    folder_name = _client_folder_name(session)
+
     if not files or all((file.filename or "").strip() == "" for file in files):
         return _redirect_documents(
             error="Please select at least one file to upload.",
-            folder=folder_name,
         )
 
     try:
         result = await rag_docs.upload_documents(folder_name, files)
     except HTTPException as exc:
         detail = str(exc.detail) if exc.detail else "Failed to upload documents."
-        return _redirect_documents(error=detail, folder=folder_name)
+        return _redirect_documents(error=detail)
     except ValueError as exc:
-        return _redirect_documents(error=str(exc), folder=folder_name)
+        return _redirect_documents(error=str(exc))
 
     uploaded = result.get("files", [])
     message = f"Uploaded {len(uploaded)} file(s) to '{folder_name}'."
-    return _redirect_documents(message=message, folder=folder_name)
+    return _redirect_documents(message=message)
 
 
-@router.post("/documents/delete")
-async def documents_delete(
+@router.post("/documents/files/delete")
+async def documents_delete_files(
     request: Request,
-    folder_name: str = Form(...),
+    selected_files: list[str] = Form([]),
 ):
     session = _get_session(request)
     if not session:
@@ -680,25 +678,27 @@ async def documents_delete(
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
-    try:
-        rag_docs.delete_folder(folder_name)
-    except HTTPException as exc:
-        detail = str(exc.detail) if exc.detail else "Failed to delete folder."
-        return _redirect_documents(error=detail)
-    except FileNotFoundError:
-        return _redirect_documents(error="Folder not found.")
+    if not selected_files:
+        return _redirect_documents(error="Select at least one file to delete.")
 
-    message = f"Deleted folder '{folder_name}'."
+    folder_name = _client_folder_name(session)
+
+    try:
+        deleted = rag_docs.delete_files(folder_name, selected_files)
+    except FileNotFoundError:
+        return _redirect_documents(error="Client folder not found.")
+    except ValueError as exc:
+        return _redirect_documents(error=str(exc))
+
+    if not deleted:
+        return _redirect_documents(error="No matching files found to delete.")
+
+    message = f"Deleted {len(deleted)} file(s) from '{folder_name}'."
     return _redirect_documents(message=message)
 
 
 @router.post("/documents/ingest")
-async def documents_ingest(
-    request: Request,
-    folder: str = Form(...),
-    provider: str = Form(""),
-    embed_model: str = Form(""),
-):
+async def documents_ingest(request: Request):
     session = _get_session(request)
     if not session:
         return RedirectResponse(
@@ -706,23 +706,20 @@ async def documents_ingest(
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
-    if not folder:
-        return _redirect_documents(error="Folder is required for ingestion.")
+    folder = _client_folder_name(session)
 
     payload = rag_ingest.IngestRequest(
         folder=folder,
         tenant_id=session["tenant_id"],
-        provider=provider or None,
-        embed_model=embed_model or None,
     )
 
     try:
         result = await rag_ingest.trigger_ingest(payload)
     except HTTPException as exc:
         detail = str(exc.detail) if exc.detail else "Failed to ingest documents."
-        return _redirect_documents(error=detail, folder=folder)
+        return _redirect_documents(error=detail)
     except Exception as exc:  # pragma: no cover - defensive
-        return _redirect_documents(error=str(exc), folder=folder)
+        return _redirect_documents(error=str(exc))
 
     ingested = result.get("documents_ingested")
     provider_used = result.get("provider")
@@ -731,7 +728,7 @@ async def documents_ingest(
         f"Ingested {ingested} document(s) from '{folder}' "
         f"using {provider_used} / {model_used}."
     )
-    return _redirect_documents(message=message, folder=folder)
+    return _redirect_documents(message=message)
 
 
 __all__ = ["router"]
