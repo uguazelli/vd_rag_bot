@@ -33,25 +33,28 @@ SESSION_COOKIE_NAME = "session_token"
 SESSION_MAX_AGE = 60 * 60 * 8  # 8 hours
 SESSION_STORE: dict[str, Dict[str, Any]] = {}
 
-PROVIDER_OPTIONS: list[str] = ["openai", "gemini"]
+PROVIDER_OPTIONS: list[str] = [
+    "openai",
+    # "gemini"
+    ]
 MODEL_OPTIONS: list[str] = [
     "gpt-4o-mini",
-    "gpt-4o",
-    "gpt-4.1-mini",
-    "gpt-3.5-turbo",
-    "claude-3-haiku",
+    # "gpt-4o",
+    # "gpt-4.1-mini",
+    # "gpt-3.5-turbo",
+    # "claude-3-haiku",
 ]
 HANDOFF_PRIORITIES: list[str] = ["low", "medium", "high", "urgent"]
 EMBED_MODEL_OPTIONS: list[str] = [
     "text-embedding-3-small",
-    "text-embedding-3-large",
-    "text-embedding-ada-002",
-    "models/text-embedding-004",
+    # "text-embedding-3-large",
+    # "text-embedding-ada-002",
+    # "models/text-embedding-004",
 ]
 CROSS_ENCODER_OPTIONS: list[str] = [
     "cross-encoder/ms-marco-MiniLM-L-6-v2",
-    "cross-encoder/ms-marco-electra-base",
-    "cross-encoder/stsb-roberta-base",
+    # "cross-encoder/ms-marco-electra-base",
+    # "cross-encoder/stsb-roberta-base",
 ]
 
 
@@ -722,11 +725,8 @@ async def documents_ingest(request: Request):
         return _redirect_documents(error=str(exc))
 
     ingested = result.get("documents_ingested")
-    provider_used = result.get("provider")
-    model_used = result.get("embed_model")
     message = (
-        f"Ingested {ingested} document(s) from '{folder}' "
-        f"using {provider_used} / {model_used}."
+        f"Number of ingested documents: {ingested}"
     )
     return _redirect_documents(message=message)
 
