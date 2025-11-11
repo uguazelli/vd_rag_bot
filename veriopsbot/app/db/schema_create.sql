@@ -268,10 +268,10 @@ ALTER SEQUENCE public.tenants_id_seq OWNED BY public.tenants.id;
 
 
 --
--- Name: users; Type: TABLE; Schema: public; Owner: -
+-- Name: veriops_users; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.users (
+CREATE TABLE public.veriops_users (
     id bigint NOT NULL,
     tenant_id bigint,
     email text NOT NULL,
@@ -281,10 +281,10 @@ CREATE TABLE public.users (
 
 
 --
--- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: veriops_users_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.users_id_seq
+CREATE SEQUENCE public.veriops_users_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -293,10 +293,10 @@ CREATE SEQUENCE public.users_id_seq
 
 
 --
--- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: veriops_users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
+ALTER SEQUENCE public.veriops_users_id_seq OWNED BY public.veriops_users.id;
 
 
 --
@@ -349,10 +349,10 @@ ALTER TABLE ONLY public.tenants ALTER COLUMN id SET DEFAULT nextval('public.tena
 
 
 --
--- Name: users id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: veriops_users id; Type: DEFAULT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
+ALTER TABLE ONLY public.veriops_users ALTER COLUMN id SET DEFAULT nextval('public.veriops_users_id_seq'::regclass);
 
 
 --
@@ -420,19 +420,19 @@ ALTER TABLE ONLY public.tenants
 
 
 --
--- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: veriops_users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_email_key UNIQUE (email);
+ALTER TABLE ONLY public.veriops_users
+    ADD CONSTRAINT veriops_users_email_key UNIQUE (email);
 
 
 --
--- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: veriops_users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.veriops_users
+    ADD CONSTRAINT veriops_users_pkey PRIMARY KEY (id);
 
 
 --
@@ -457,15 +457,14 @@ CREATE INDEX rag_vectors_idx_tenant_id_text ON public.data_rag_vectors USING btr
 
 
 --
--- Name: users users_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: veriops_users_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.veriops_users
+    ADD CONSTRAINT veriops_users_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
 
 
 --
 -- PostgreSQL database dump complete
 --
-
 
