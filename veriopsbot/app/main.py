@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fastapi import FastAPI, File, Request, UploadFile
-from fastapi.staticfiles import StaticFiles, Request
+from fastapi.staticfiles import StaticFiles
 import json
 
 from .controller import rag_docs, rag_ingest, webhooks
