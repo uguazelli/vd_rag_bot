@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import mimetypes
 import secrets
 from pathlib import Path
@@ -57,6 +58,59 @@ CROSS_ENCODER_OPTIONS: list[str] = [
     # "cross-encoder/stsb-roberta-base",
 ]
 
+# =========================
+# 🔎 Debug helpers (safe)
+# =========================
+REDACT_KEYS = {
+    "password", "confirm_password",
+    "llm_api_key", "crm_token",
+    "chatwoot_api_access_token", "chatwoot_bot_access_token",
+    "token", "api_key", "authorization", "auth", "bearer", "secret", "password_hash",
+}
+
+def _safe_value(key: str, value: Any) -> Any:
+    try:
+        k = key.lower()
+    except Exception:
+        k = key
+    if isinstance(value, (bytes, bytearray)):
+        return f"<{len(value)} bytes>"
+    if any(s in k for s in REDACT_KEYS):
+        return "******"
+    # avoid dumping massive strings
+    if isinstance(value, str) and len(value) > 500:
+        return value[:500] + "…"
+    return value
+
+def _safe_map(d: Dict[str, Any] | None) -> Dict[str, Any]:
+    if not d:
+        return {}
+    return {k: _safe_value(k, v) for k, v in d.items()}
+
+def _log(event: str, **fields: Any) -> None:
+    # event emoji map
+    prefix = {
+        "enter": "🟢",
+        "exit": "🔵",
+        "warn": "🟠",
+        "error": "❌",
+        "info": "🧭",
+        "db": "🗄️",
+        "session": "🧩",
+        "files": "📂",
+        "form": "📮",
+        "ingest": "🧪",
+    }.get(event, "🔹")
+    payload = {k: _safe_value(k, v) for k, v in fields.items()}
+    try:
+        print(f"{prefix} {event.upper()} {json.dumps(payload, ensure_ascii=False)}", flush=True)
+    except Exception:
+        # fallback if something is not JSON-serializable
+        print(f"{prefix} {event.upper()} {payload}", flush=True)
+
+# =========================
+# Internal helpers (unchanged, with logs)
+# =========================
 
 def _redirect_documents(**params: str | None) -> RedirectResponse:
     final_params = {key: value for key, value in params.items() if value}
@@ -64,14 +118,16 @@ def _redirect_documents(**params: str | None) -> RedirectResponse:
     url = "/documents"
     if query:
         url = f"{url}?{query}"
+    _log("info", action="redirect_documents", url=url, params=final_params)
     return RedirectResponse(url=url, status_code=status.HTTP_303_SEE_OTHER)
 
 
 def _get_session(request: Request) -> Dict[str, Any] | None:
     token = request.cookies.get(SESSION_COOKIE_NAME)
-    if not token:
-        return None
-    return SESSION_STORE.get(token)
+    has_token = bool(token)
+    session = SESSION_STORE.get(token) if token else None
+    _log("session", action="_get_session", has_token=has_token, session_found=bool(session))
+    return session
 
 
 def _issue_session_response(
@@ -96,14 +152,17 @@ def _issue_session_response(
         httponly=True,
         samesite="lax",
     )
+    _log("session", action="_issue_session_response", redirect_url=redirect_url, user_id=user.get("id"), tenant_id=user.get("tenant_id"))
     return response
 
 
 def _client_folder_name(session: Dict[str, Any]) -> str:
-    return rag_docs.tenant_folder_name(
+    name = rag_docs.tenant_folder_name(
         tenant_id=session["tenant_id"],
         tenant_email=session.get("email"),
     )
+    _log("files", action="_client_folder_name", folder=name, tenant_id=session.get("tenant_id"))
+    return name
 
 
 def _file_type_label(file_name: str) -> str:
@@ -129,6 +188,7 @@ def _build_file_rows(folder_name: str, file_names: list[str]) -> list[Dict[str, 
                 "url": f"/rag/docs/{folder_name}/{file_name}",
             }
         )
+    _log("files", action="_build_file_rows", folder=folder_name, count=len(rows))
     return rows
 
 
@@ -148,7 +208,7 @@ def _build_form_values(
             value = default
         return "" if value is None else str(value)
 
-    return {
+    values = {
         "llm_name": pick("llm_name", llm_params.get("name")),
         "llm_api_key": pick("llm_api_key", llm_params.get("api_key")),
         "llm_model_answer": pick("llm_model_answer", llm_params.get("model_answer")),
@@ -197,21 +257,28 @@ def _build_form_values(
             omni_params.get("chatwoot_bot_access_token"),
         ),
     }
+    _log("form", action="_build_form_values", overrides_present=bool(overrides), keys=list(values.keys()))
+    return values
 
 
 @router.get("/", response_class=HTMLResponse)
 async def root(request: Request):
+    _log("enter", route="GET /")
     session = _get_session(request)
     target = "/settings" if session else "/login"
+    _log("exit", route="GET /", redirect=target)
     return RedirectResponse(url=target, status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_form(request: Request):
+    _log("enter", route="GET /login")
     session = _get_session(request)
     if session:
+        _log("info", route="GET /login", detail="already logged in, redirecting /settings")
         return RedirectResponse(url="/settings", status_code=status.HTTP_303_SEE_OTHER)
 
+    _log("exit", route="GET /login", template="login.html")
     return templates.TemplateResponse(
         "login.html",
         {
@@ -224,12 +291,15 @@ async def login_form(request: Request):
 
 @router.post("/login", response_class=HTMLResponse)
 async def login(request: Request):
+    _log("enter", route="POST /login")
     form = await request.form()
+    _log("form", route="POST /login", received=_safe_map(dict(form)))
     email_raw = (form.get("email") or "").strip()
     password = form.get("password") or ""
     email = email_raw.lower()
 
     if not email or not password:
+        _log("warn", route="POST /login", reason="missing email or password")
         return templates.TemplateResponse(
             "login.html",
             {
@@ -240,10 +310,17 @@ async def login(request: Request):
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    user = await get_user_by_email(email)
+    try:
+        user = await get_user_by_email(email)
+        _log("db", op="get_user_by_email", email=email, user_found=bool(user))
+    except Exception as e:
+        _log("error", route="POST /login", during="get_user_by_email", error=str(e))
+        raise
+
     password_hash = user.get("password_hash") if user else None
 
     if not user or not password_hash:
+        _log("warn", route="POST /login", reason="user not found or no password hash")
         return templates.TemplateResponse(
             "login.html",
             {
@@ -255,6 +332,7 @@ async def login(request: Request):
         )
 
     if not bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8")):
+        _log("warn", route="POST /login", reason="password mismatch", email=email)
         return templates.TemplateResponse(
             "login.html",
             {
@@ -265,15 +343,19 @@ async def login(request: Request):
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
+    _log("exit", route="POST /login", status="success")
     return _issue_session_response(user)
 
 
 @router.get("/register", response_class=HTMLResponse)
 async def register_form(request: Request):
+    _log("enter", route="GET /register")
     session = _get_session(request)
     if session:
+        _log("info", route="GET /register", detail="already logged in, redirecting /settings")
         return RedirectResponse(url="/settings", status_code=status.HTTP_303_SEE_OTHER)
 
+    _log("exit", route="GET /register", template="register.html")
     return templates.TemplateResponse(
         "register.html",
         {
@@ -287,11 +369,14 @@ async def register_form(request: Request):
 
 @router.post("/register", response_class=HTMLResponse)
 async def register(request: Request):
+    _log("enter", route="POST /register")
     session = _get_session(request)
     if session:
+        _log("info", route="POST /register", detail="already logged in, redirecting /settings")
         return RedirectResponse(url="/settings", status_code=status.HTTP_303_SEE_OTHER)
 
     form = await request.form()
+    _log("form", route="POST /register", received=_safe_map(dict(form)))
     email_raw = (form.get("email") or "").strip()
     email = email_raw.lower()
     password = form.get("password") or ""
@@ -318,11 +403,18 @@ async def register(request: Request):
     if password != confirm_password:
         errors.append("Passwords do not match.")
 
-    existing_user = await get_user_by_email(email) if email else {}
+    try:
+        existing_user = await get_user_by_email(email) if email else {}
+        _log("db", op="get_user_by_email", email=email, exists=bool(existing_user))
+    except Exception as e:
+        _log("error", route="POST /register", during="get_user_by_email", error=str(e))
+        raise
+
     if existing_user:
         errors.append("An account with this email already exists.")
 
     if errors:
+        _log("warn", route="POST /register", errors=errors)
         return templates.TemplateResponse(
             "register.html",
             {
@@ -345,7 +437,9 @@ async def register(request: Request):
             email=email,
             password_hash=password_hash,
         )
-    except Exception:
+        _log("db", op="create_user", tenant_id=tenant_id, email=email, success=True)
+    except Exception as e:
+        _log("error", route="POST /register", during="create_user", error=str(e))
         errors.append("Failed to create user. Please try again or contact support.")
         return templates.TemplateResponse(
             "register.html",
@@ -358,34 +452,46 @@ async def register(request: Request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
+    _log("exit", route="POST /register", status="success")
     return _issue_session_response(user)
 
 
 @router.get("/logout")
 async def logout(request: Request):
+    _log("enter", route="GET /logout")
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
         SESSION_STORE.pop(token, None)
-
+        _log("session", action="logout", removed_token=bool(token))
     response = RedirectResponse(
         url="/login",
         status_code=status.HTTP_303_SEE_OTHER,
     )
     response.delete_cookie(SESSION_COOKIE_NAME)
+    _log("exit", route="GET /logout", redirect="/login")
     return response
 
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
+    _log("enter", route="GET /settings")
     session = _get_session(request)
     if not session:
+        _log("warn", route="GET /settings", reason="no session -> redirect /login")
         return RedirectResponse(
             url="/login",
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
-    config = await get_params_by_tenant_id(session["tenant_id"])
+    try:
+        config = await get_params_by_tenant_id(session["tenant_id"])
+        _log("db", op="get_params_by_tenant_id", tenant_id=session["tenant_id"], has_config=bool(config))
+    except Exception as e:
+        _log("error", route="GET /settings", during="get_params_by_tenant_id", error=str(e))
+        raise
+
     form_values = _build_form_values(config)
+    _log("exit", route="GET /settings", template="settings.html")
     return templates.TemplateResponse(
         "settings.html",
         {
@@ -405,19 +511,28 @@ async def settings_page(request: Request):
 
 @router.post("/settings", response_class=HTMLResponse)
 async def update_settings(request: Request):
+    _log("enter", route="POST /settings")
     session = _get_session(request)
     if not session:
+        _log("warn", route="POST /settings", reason="no session -> redirect /login")
         return RedirectResponse(
             url="/login",
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
-    config = await get_params_by_tenant_id(session["tenant_id"])
+    try:
+        config = await get_params_by_tenant_id(session["tenant_id"])
+        _log("db", op="get_params_by_tenant_id", tenant_id=session["tenant_id"], has_config=bool(config))
+    except Exception as e:
+        _log("error", route="POST /settings", during="get_params_by_tenant_id", error=str(e))
+        raise
+
     form = await request.form()
     form_dict: Dict[str, str] = {
         key: (value.strip() if isinstance(value, str) else value)
         for key, value in form.items()
     }
+    _log("form", route="POST /settings", received=_safe_map(form_dict))
 
     form_values = _build_form_values(config, overrides=form_dict)
     errors: list[str] = []
@@ -481,6 +596,7 @@ async def update_settings(request: Request):
         errors.append("Omnichannel settings are missing for this tenant.")
 
     if errors:
+        _log("warn", route="POST /settings", errors=errors)
         return templates.TemplateResponse(
             "settings.html",
             {
@@ -566,25 +682,36 @@ async def update_settings(request: Request):
         "chatwoot_bot_access_token"
     ]
 
-    await update_llm_settings(
-        llm_id=llm_id,
-        params=updated_llm_params,
-    )
-    await update_crm_settings(
-        crm_id=crm_id,
-        params=updated_crm_params,
-    )
-    await update_omnichannel_settings(
-        omnichannel_id=omnichannel_id,
-        params=updated_omni_params,
-    )
+    try:
+        await update_llm_settings(
+            llm_id=llm_id,
+            params=updated_llm_params,
+        )
+        _log("db", op="update_llm_settings", llm_id=llm_id, ok=True)
 
-    await invalidate_params_cache(omnichannel_id)
-    await invalidate_tenant_params_cache(session["tenant_id"])
+        await update_crm_settings(
+            crm_id=crm_id,
+            params=updated_crm_params,
+        )
+        _log("db", op="update_crm_settings", crm_id=crm_id, ok=True)
+
+        await update_omnichannel_settings(
+            omnichannel_id=omnichannel_id,
+            params=updated_omni_params,
+        )
+        _log("db", op="update_omnichannel_settings", omnichannel_id=omnichannel_id, ok=True)
+
+        await invalidate_params_cache(omnichannel_id)
+        await invalidate_tenant_params_cache(session["tenant_id"])
+        _log("db", op="invalidate_caches", omnichannel_id=omnichannel_id, tenant_id=session["tenant_id"], ok=True)
+    except Exception as e:
+        _log("error", route="POST /settings", during="update_settings_and_invalidate", error=str(e))
+        raise
 
     refreshed_config = await get_params_by_tenant_id(session["tenant_id"])
     refreshed_form_values = _build_form_values(refreshed_config)
 
+    _log("exit", route="POST /settings", status="success")
     return templates.TemplateResponse(
         "settings.html",
         {
@@ -604,8 +731,10 @@ async def update_settings(request: Request):
 
 @router.get("/documents", response_class=HTMLResponse)
 async def documents_page(request: Request):
+    _log("enter", route="GET /documents")
     session = _get_session(request)
     if not session:
+        _log("warn", route="GET /documents", reason="no session -> redirect /login")
         return RedirectResponse(
             url="/login",
             status_code=status.HTTP_303_SEE_OTHER,
@@ -615,7 +744,9 @@ async def documents_page(request: Request):
     rag_docs.ensure_folder(client_folder)
     try:
         client_files = rag_docs.list_folder_files(client_folder)
+        _log("files", action="list_folder_files", folder=client_folder, count=len(client_files))
     except FileNotFoundError:
+        _log("warn", action="list_folder_files", folder=client_folder, reason="FileNotFoundError")
         client_files = []
 
     file_rows = _build_file_rows(client_folder, client_files)
@@ -623,7 +754,7 @@ async def documents_page(request: Request):
     message = request.query_params.get("message")
     error_param = request.query_params.get("error")
     errors = [error_param] if error_param else []
-
+    _log("exit", route="GET /documents", message=message, errors_count=len(errors))
     return templates.TemplateResponse(
         "documents.html",
         {
@@ -642,30 +773,39 @@ async def documents_upload(
     request: Request,
     files: list[UploadFile] = File(...),
 ):
+    _log("enter", route="POST /documents/upload")
     session = _get_session(request)
     if not session:
+        _log("warn", route="POST /documents/upload", reason="no session -> redirect /login")
         return RedirectResponse(
             url="/login",
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
     folder_name = _client_folder_name(session)
+    filenames = [f.filename for f in (files or [])]
+    _log("files", action="incoming_upload", folder=folder_name, files=filenames)
 
     if not files or all((file.filename or "").strip() == "" for file in files):
+        _log("warn", route="POST /documents/upload", reason="no files selected")
         return _redirect_documents(
             error="Please select at least one file to upload.",
         )
 
     try:
         result = await rag_docs.upload_documents(folder_name, files)
+        _log("files", action="upload_documents", folder=folder_name, result=_safe_map(result))
     except HTTPException as exc:
         detail = str(exc.detail) if exc.detail else "Failed to upload documents."
+        _log("error", route="POST /documents/upload", http_error=detail)
         return _redirect_documents(error=detail)
     except ValueError as exc:
+        _log("error", route="POST /documents/upload", value_error=str(exc))
         return _redirect_documents(error=str(exc))
 
     uploaded = result.get("files", [])
     message = f"Uploaded {len(uploaded)} file(s) to '{folder_name}'."
+    _log("exit", route="POST /documents/upload", message=message)
     return _redirect_documents(message=message)
 
 
@@ -674,60 +814,73 @@ async def documents_delete_files(
     request: Request,
     selected_files: list[str] = Form([]),
 ):
+    _log("enter", route="POST /documents/files/delete")
     session = _get_session(request)
     if not session:
+        _log("warn", route="POST /documents/files/delete", reason="no session -> redirect /login")
         return RedirectResponse(
             url="/login",
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
     if not selected_files:
+        _log("warn", route="POST /documents/files/delete", reason="no files selected")
         return _redirect_documents(error="Select at least one file to delete.")
 
     folder_name = _client_folder_name(session)
+    _log("files", action="delete_request", folder=folder_name, files=selected_files)
 
     try:
         deleted = rag_docs.delete_files(folder_name, selected_files)
+        _log("files", action="delete_files", folder=folder_name, deleted=deleted)
     except FileNotFoundError:
+        _log("warn", action="delete_files", folder=folder_name, reason="folder not found")
         return _redirect_documents(error="Client folder not found.")
     except ValueError as exc:
+        _log("error", action="delete_files", value_error=str(exc))
         return _redirect_documents(error=str(exc))
 
     if not deleted:
+        _log("warn", action="delete_files", reason="no matching files")
         return _redirect_documents(error="No matching files found to delete.")
 
     message = f"Deleted {len(deleted)} file(s) from '{folder_name}'."
+    _log("exit", route="POST /documents/files/delete", message=message)
     return _redirect_documents(message=message)
 
 
 @router.post("/documents/ingest")
 async def documents_ingest(request: Request):
+    _log("enter", route="POST /documents/ingest")
     session = _get_session(request)
     if not session:
+        _log("warn", route="POST /documents/ingest", reason="no session -> redirect /login")
         return RedirectResponse(
             url="/login",
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
     folder = _client_folder_name(session)
-
     payload = rag_ingest.IngestRequest(
         folder=folder,
         tenant_id=session["tenant_id"],
     )
+    _log("ingest", action="trigger_ingest_start", payload=_safe_map(payload.dict() if hasattr(payload, "dict") else payload.__dict__))
 
     try:
         result = await rag_ingest.trigger_ingest(payload)
+        _log("ingest", action="trigger_ingest_result", result=_safe_map(result))
     except HTTPException as exc:
         detail = str(exc.detail) if exc.detail else "Failed to ingest documents."
+        _log("error", route="POST /documents/ingest", http_error=detail)
         return _redirect_documents(error=detail)
     except Exception as exc:  # pragma: no cover - defensive
+        _log("error", route="POST /documents/ingest", error=str(exc))
         return _redirect_documents(error=str(exc))
 
     ingested = result.get("documents_ingested")
-    message = (
-        f"Number of ingested documents: {ingested}"
-    )
+    message = f"Number of ingested documents: {engested}" if (engested := result.get("documents_ingested")) is not None else "Ingest completed."
+    _log("exit", route="POST /documents/ingest", message=message)
     return _redirect_documents(message=message)
 
 
