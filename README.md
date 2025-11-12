@@ -77,40 +77,10 @@ Leave the rest at their defaults unless you need social logins, S3 storage, or o
 
 ### One-off tunnel (quick share)
 
-```bash
-brew install cloudflared   # macOS, run once
-cloudflared tunnel --url http://localhost:3000
-```
-
-### Persistent tunnel on your Cloudflare domain
-
-1. **Authenticate and create the tunnel**
-   ```bash
-   cloudflared tunnel login
-   cloudflared tunnel create veriops
-   ```
-2. **Map subdomains**
-   ```bash
-   cloudflared tunnel route dns veriops chat.veridatapro.com
-   cloudflared tunnel route dns veriops bot.veridatapro.com
-   ```
-3. **Create the config**
-   `~/.cloudflared/config.yml` (or `/root/.cloudflared/config.yml` on a server):
-   ```yaml
-   tunnel: <TUNNEL_ID>
-   credentials-file: /root/.cloudflared/<TUNNEL_ID>.json
-
-   ingress:
-     - hostname: chat.veridatapro.com
-       service: http://chatwoot-web:3000
-     - hostname: bot.veridatapro.com
-       service: http://veriopsbot:8000
-     - service: http_status:404
-   ```
-4. **Run the tunnel**
-   ```bash
-   cloudflared --config ~/.cloudflared/config.yml tunnel run
-   ```
+1. Access Zero trust -> Network -> Tunnels
+2. Create anew Tunnul if dosent exists
+3. Follow the instruction to install locally as a service
+4. Add Published application routes for each port
 
 ## Remote server (DatabaseMart VPS)
 
