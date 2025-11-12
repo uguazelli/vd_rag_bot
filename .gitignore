@@ -19,4 +19,4 @@ wheels/
 __pycache__/
 
 
-.vscode
+.vscodereplacements.txt
