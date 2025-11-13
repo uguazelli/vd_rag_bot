@@ -18,7 +18,8 @@ class FolderControllerError(RuntimeError):
 
 
 def _project_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    """Return repository root (veriopsbot)."""
+    return Path(__file__).resolve().parents[2]
 
 
 def _resolve_storage_root() -> Path:
