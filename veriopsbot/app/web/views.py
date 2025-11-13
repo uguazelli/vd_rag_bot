@@ -115,9 +115,10 @@ def _log(event: str, **fields: Any) -> None:
 def _redirect_documents(**params: str | None) -> RedirectResponse:
     final_params = {key: value for key, value in params.items() if value}
     query = urlencode(final_params)
-    url = "/documents"
+    base_url = "/settings"
     if query:
-        url = f"{url}?{query}"
+        base_url = f"{base_url}?{query}"
+    url = f"{base_url}#documents"
     _log("info", action="redirect_documents", url=url, params=final_params)
     return RedirectResponse(url=url, status_code=status.HTTP_303_SEE_OTHER)
 
@@ -190,6 +191,48 @@ def _build_file_rows(folder_name: str, file_names: list[str]) -> list[Dict[str, 
         )
     _log("files", action="_build_file_rows", folder=folder_name, count=len(rows))
     return rows
+
+
+def _build_documents_context(session: Dict[str, Any]) -> Dict[str, Any]:
+    folder_name = _client_folder_name(session)
+    rag_docs.ensure_folder(folder_name)
+    try:
+        client_files = rag_docs.list_folder_files(folder_name)
+        _log("files", action="list_folder_files", folder=folder_name, count=len(client_files))
+    except FileNotFoundError:
+        _log("warn", action="list_folder_files", folder=folder_name, reason="FileNotFoundError")
+        client_files = []
+    file_rows = _build_file_rows(folder_name, client_files)
+    return {
+        "client_folder": folder_name,
+        "file_rows": file_rows,
+    }
+
+
+def _settings_template_context(
+    request: Request,
+    session: Dict[str, Any],
+    form_values: Dict[str, str],
+    *,
+    message: str | None,
+    errors: list[str],
+    documents_message: str | None = None,
+) -> Dict[str, Any]:
+    context: Dict[str, Any] = {
+        "request": request,
+        "user_email": session["email"],
+        "form_values": form_values,
+        "message": message,
+        "errors": errors,
+        "documents_message": documents_message,
+        "provider_options": PROVIDER_OPTIONS,
+        "model_options": MODEL_OPTIONS,
+        "handoff_priorities": HANDOFF_PRIORITIES,
+        "embed_options": EMBED_MODEL_OPTIONS,
+        "cross_encoder_options": CROSS_ENCODER_OPTIONS,
+    }
+    context.update(_build_documents_context(session))
+    return context
 
 
 def _build_form_values(
@@ -491,21 +534,22 @@ async def settings_page(request: Request):
         raise
 
     form_values = _build_form_values(config)
+    message = request.query_params.get("message")
+    errors: list[str] = []
+    error_param = request.query_params.get("error")
+    if error_param:
+        errors.append(error_param)
     _log("exit", route="GET /settings", template="settings.html")
     return templates.TemplateResponse(
         "settings.html",
-        {
-            "request": request,
-            "user_email": session["email"],
-            "form_values": form_values,
-            "message": None,
-            "errors": [],
-            "provider_options": PROVIDER_OPTIONS,
-            "model_options": MODEL_OPTIONS,
-            "handoff_priorities": HANDOFF_PRIORITIES,
-            "embed_options": EMBED_MODEL_OPTIONS,
-            "cross_encoder_options": CROSS_ENCODER_OPTIONS,
-        },
+        _settings_template_context(
+            request,
+            session,
+            form_values,
+            message=message,
+            errors=errors,
+            documents_message=message,
+        ),
     )
 
 
@@ -540,6 +584,10 @@ async def update_settings(request: Request):
     if not config:
         errors.append("Tenant configuration not found. Please contact support.")
 
+    current_llm = config.get("llm_params") or {}
+    current_crm = config.get("crm_params") or {}
+    current_omni = config.get("omnichannel") or {}
+
     required_fields = {
         "llm_name": "LLM name",
         "llm_api_key": "LLM API key",
@@ -551,13 +599,32 @@ async def update_settings(request: Request):
         "chatwoot_api_access_token": "Chatwoot API access token",
         "chatwoot_bot_access_token": "Chatwoot bot access token",
     }
+    existing_required_values = {
+        "llm_name": current_llm.get("name"),
+        "llm_api_key": current_llm.get("api_key"),
+        "llm_model_answer": current_llm.get("model_answer"),
+        "crm_url": current_crm.get("url"),
+        "crm_token": current_crm.get("token"),
+        "chatwoot_api_url": current_omni.get("chatwoot_api_url"),
+        "chatwoot_account_id": current_omni.get("chatwoot_account_id"),
+        "chatwoot_api_access_token": current_omni.get("chatwoot_api_access_token"),
+        "chatwoot_bot_access_token": current_omni.get("chatwoot_bot_access_token"),
+    }
+    effective_inputs: Dict[str, str] = {}
     for field, label in required_fields.items():
-        if not form_dict.get(field):
+        submitted_value = form_dict.get(field)
+        if submitted_value is not None:
+            candidate = submitted_value
+        else:
+            candidate = None
+        if isinstance(candidate, str) and candidate == "":
+            candidate = None
+        if candidate is None:
+            candidate = existing_required_values.get(field)
+        if not candidate:
             errors.append(f"{label} is required.")
-
-    current_llm = config.get("llm_params") or {}
-    current_crm = config.get("crm_params") or {}
-    current_omni = config.get("omnichannel") or {}
+        else:
+            effective_inputs[field] = str(candidate)
 
     top_k_raw = form_dict.get("llm_top_k", "")
     top_k = current_llm.get("top_k")
@@ -599,25 +666,20 @@ async def update_settings(request: Request):
         _log("warn", route="POST /settings", errors=errors)
         return templates.TemplateResponse(
             "settings.html",
-            {
-                "request": request,
-                "user_email": session["email"],
-                "form_values": form_values,
-                "message": None,
-                "errors": errors,
-                "provider_options": PROVIDER_OPTIONS,
-                "model_options": MODEL_OPTIONS,
-                "handoff_priorities": HANDOFF_PRIORITIES,
-                "embed_options": EMBED_MODEL_OPTIONS,
-                "cross_encoder_options": CROSS_ENCODER_OPTIONS,
-            },
+            _settings_template_context(
+                request,
+                session,
+                form_values,
+                message=None,
+                errors=errors,
+            ),
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     updated_llm_params = dict(current_llm)
-    updated_llm_params["name"] = form_dict["llm_name"]
-    updated_llm_params["api_key"] = form_dict["llm_api_key"]
-    updated_llm_params["model_answer"] = form_dict["llm_model_answer"]
+    updated_llm_params["name"] = effective_inputs["llm_name"]
+    updated_llm_params["api_key"] = effective_inputs["llm_api_key"]
+    updated_llm_params["model_answer"] = effective_inputs["llm_model_answer"]
 
     def set_or_pop(mapping: Dict[str, Any], key: str, value: Any) -> None:
         if value is None:
@@ -669,16 +731,16 @@ async def update_settings(request: Request):
         updated_llm_params["monthly_llm_request_limit"] = monthly_limit
 
     updated_crm_params = dict(current_crm)
-    updated_crm_params["url"] = form_dict["crm_url"]
-    updated_crm_params["token"] = form_dict["crm_token"]
+    updated_crm_params["url"] = effective_inputs["crm_url"]
+    updated_crm_params["token"] = effective_inputs["crm_token"]
 
     updated_omni_params = dict(current_omni)
-    updated_omni_params["chatwoot_api_url"] = form_dict["chatwoot_api_url"]
-    updated_omni_params["chatwoot_account_id"] = form_dict["chatwoot_account_id"]
-    updated_omni_params["chatwoot_api_access_token"] = form_dict[
+    updated_omni_params["chatwoot_api_url"] = effective_inputs["chatwoot_api_url"]
+    updated_omni_params["chatwoot_account_id"] = effective_inputs["chatwoot_account_id"]
+    updated_omni_params["chatwoot_api_access_token"] = effective_inputs[
         "chatwoot_api_access_token"
     ]
-    updated_omni_params["chatwoot_bot_access_token"] = form_dict[
+    updated_omni_params["chatwoot_bot_access_token"] = effective_inputs[
         "chatwoot_bot_access_token"
     ]
 
@@ -714,18 +776,13 @@ async def update_settings(request: Request):
     _log("exit", route="POST /settings", status="success")
     return templates.TemplateResponse(
         "settings.html",
-        {
-            "request": request,
-            "user_email": session["email"],
-            "form_values": refreshed_form_values,
-            "message": "Settings updated successfully.",
-            "errors": [],
-            "provider_options": PROVIDER_OPTIONS,
-            "model_options": MODEL_OPTIONS,
-            "handoff_priorities": HANDOFF_PRIORITIES,
-            "embed_options": EMBED_MODEL_OPTIONS,
-            "cross_encoder_options": CROSS_ENCODER_OPTIONS,
-        },
+        _settings_template_context(
+            request,
+            session,
+            refreshed_form_values,
+            message="Settings updated successfully.",
+            errors=[],
+        ),
     )
 
 
@@ -740,32 +797,9 @@ async def documents_page(request: Request):
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
-    client_folder = _client_folder_name(session)
-    rag_docs.ensure_folder(client_folder)
-    try:
-        client_files = rag_docs.list_folder_files(client_folder)
-        _log("files", action="list_folder_files", folder=client_folder, count=len(client_files))
-    except FileNotFoundError:
-        _log("warn", action="list_folder_files", folder=client_folder, reason="FileNotFoundError")
-        client_files = []
-
-    file_rows = _build_file_rows(client_folder, client_files)
-
-    message = request.query_params.get("message")
-    error_param = request.query_params.get("error")
-    errors = [error_param] if error_param else []
-    _log("exit", route="GET /documents", message=message, errors_count=len(errors))
-    return templates.TemplateResponse(
-        "documents.html",
-        {
-            "request": request,
-            "user_email": session["email"],
-            "client_folder": client_folder,
-            "file_rows": file_rows,
-            "message": message,
-            "errors": errors,
-        },
-    )
+    params = dict(request.query_params)
+    _log("info", route="GET /documents", action="redirect_to_settings", params=_safe_map(params))
+    return _redirect_documents(**params)
 
 
 @router.post("/documents/upload")

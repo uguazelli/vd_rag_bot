@@ -6,7 +6,7 @@
 
 {% block header_actions %}
 <span class="text-white-50 small me-3">{{ user_email }}</span>
-<a href="/documents" class="btn btn-outline-light btn-sm">Documents</a>
+<a href="#documents" class="btn btn-outline-light btn-sm">Documents</a>
 <a href="/logout" class="btn btn-outline-light btn-sm">Log out</a>
 {% endblock %}
 
@@ -92,7 +92,7 @@
             <div id="collapse-llm" class="accordion-collapse collapse" aria-labelledby="heading-llm"
                 data-bs-parent="#settingsAccordion">
                 <div class="accordion-body settings-panel-body">
-                    {% set provider_current = form_values.llm_name %}
+                    <!-- {% set provider_current = form_values.llm_name %}
                     <div class="form-group row mb-3 align-items-center">
                         <label for="llm_name" class="col-md-4 col-form-label">Provider name <span
                                 class="portal-required">*</span></label>
@@ -139,7 +139,7 @@
                             <input id="llm_api_key" name="llm_api_key" value="{{ form_values.llm_api_key }}" required
                                 class="form-control portal-input">
                         </div>
-                    </div>
+                    </div> -->
                     <div class="form-group row mb-3 align-items-center">
                         <label for="llm_top_k" class="col-md-4 col-form-label">Top K</label>
                         <div class="col-md-8">
@@ -172,7 +172,7 @@
                             </select>
                         </div>
                     </div>
-                    {% set embed_current = form_values.llm_openai_embed_model %}
+                    <!-- {% set embed_current = form_values.llm_openai_embed_model %}
                     <div class="form-group row mb-3 align-items-center">
                         <label for="llm_openai_embed_model" class="col-md-4 col-form-label">Embedding model</label>
                         <div class="col-md-8">
@@ -216,7 +216,7 @@
                                 value="{{ form_values.llm_monthly_limit }}" placeholder="Leave blank for no limit"
                                 class="form-control portal-input">
                         </div>
-                    </div>
+                    </div> -->
                     <div class="form-group row mb-3 align-items-start">
                         <label for="llm_handoff_public_reply" class="col-md-4 col-form-label">Handoff public
                             reply</label>
@@ -250,14 +250,14 @@
             <div id="collapse-crm" class="accordion-collapse collapse" aria-labelledby="heading-crm"
                 data-bs-parent="#settingsAccordion">
                 <div class="accordion-body settings-panel-body">
-                    <div class="form-group row mb-3 align-items-center">
+                    <!-- <div class="form-group row mb-3 align-items-center">
                         <label for="crm_url" class="col-md-4 col-form-label">API URL <span
                                 class="portal-required">*</span></label>
                         <div class="col-md-8">
                             <input id="crm_url" name="crm_url" value="{{ form_values.crm_url }}" required
                                 class="form-control portal-input">
                         </div>
-                    </div>
+                    </div> -->
                     <div class="form-group row mb-3 align-items-center">
                         <label for="crm_token" class="col-md-4 col-form-label">API token <span
                                 class="portal-required">*</span></label>
@@ -283,7 +283,7 @@
             <div id="collapse-omni" class="accordion-collapse collapse" aria-labelledby="heading-omni"
                 data-bs-parent="#settingsAccordion">
                 <div class="accordion-body settings-panel-body">
-                    <div class="form-group row mb-3 align-items-center">
+                    <!-- <div class="form-group row mb-3 align-items-center">
                         <label for="chatwoot_api_url" class="col-md-4 col-form-label">API URL <span
                                 class="portal-required">*</span></label>
                         <div class="col-md-8">
@@ -299,7 +299,7 @@
                                 value="{{ form_values.chatwoot_account_id }}" required
                                 class="form-control portal-input">
                         </div>
-                    </div>
+                    </div> -->
                     <div class="form-group row mb-3 align-items-center">
                         <label for="chatwoot_api_access_token" class="col-md-4 col-form-label">API access token <span
                                 class="portal-required">*</span></label>
@@ -327,5 +327,136 @@
         <button type="submit" class="btn btn-primary px-5">Save changes</button>
     </div>
 </form>
+
+<section id="documents" class="mt-5 pt-3">
+    {% set file_count = file_rows | length %}
+    <div class="portal-hero d-flex flex-column flex-lg-row justify-content-between gap-4 align-items-lg-center">
+        <div class="z-1">
+            <span class="portal-pill"><i class="bi bi-folder-fill me-1"></i> Knowledge Base</span>
+            <p>Upload curated content and keep embeddings fresh.</p>
+        </div>
+        <div class="portal-hero-actions d-flex flex-column flex-sm-row gap-3">
+            <form method="post" action="/documents/ingest" class="mb-0" data-loading-modal="true">
+                <button type="submit" class="btn btn-light text-primary fw-semibold">
+                    <i class="bi bi-arrow-repeat me-2"></i>Refresh knowledge base
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="portal-stats-grid">
+        <div class="portal-stat-card">
+            <span class="portal-stat-label">Files ready</span>
+            <span class="portal-stat-value">{{ file_count }}</span>
+            <span class="portal-stat-hint">Stored inside your private tenant workspace.</span>
+        </div>
+        <div class="portal-stat-card">
+            <span class="portal-stat-label">Current folder</span>
+            <span class="portal-stat-value">{{ client_folder }}</span>
+            <span class="portal-stat-hint">Auto-generated per client to keep docs isolated.</span>
+        </div>
+        <div class="portal-stat-card">
+            <span class="portal-stat-label">Sync status</span>
+            <span class="portal-stat-value{% if documents_message %} text-success{% endif %}">{{ documents_message or "Awaiting refresh"
+                }}</span>
+            <span class="portal-stat-hint">Use “Refresh knowledge base” after uploads.</span>
+        </div>
+        <div class="portal-stat-card">
+            <span class="portal-stat-label">Next action</span>
+            <span class="portal-stat-value">On demand</span>
+            <span class="portal-stat-hint">Ingestion runs whenever you trigger it.</span>
+        </div>
+    </div>
+
+    <div class="portal-card portal-table">
+        <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-4">
+            <div>
+                <h3 class="h4 mb-1">Files in your knowledge base</h3>
+                <p class="text-muted mb-0">Select files to delete or open them in a dedicated tab.</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal"
+                    data-bs-target="#uploadDocumentsModal">
+                    <i class="bi bi-plus-lg me-1"></i> Add files
+                </button>
+            </div>
+        </div>
+
+        {% if file_rows %}
+        <form method="post" action="/documents/files/delete" class="d-grid gap-3" data-loading-modal="true">
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="text-center" style="width: 3rem;">
+                                <span class="visually-hidden">Select</span>
+                            </th>
+                            <th scope="col">File name</th>
+                            <th scope="col" class="text-nowrap">File type</th>
+                            <th scope="col" class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for file in file_rows %}
+                        <tr>
+                            <td class="text-center">
+                                <input class="form-check-input" type="checkbox" name="selected_files"
+                                    value="{{ file.name }}">
+                            </td>
+                            <td class="fw-semibold">{{ file.name }}</td>
+                            <td><span class="portal-file-type">{{ file.type }}</span></td>
+                            <td class="text-end">
+                                <a href="{{ file.url }}" target="_blank" rel="noopener"
+                                    class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="portal-table-actions">
+                <span class="text-muted small">Selected files will be permanently removed.</span>
+                <button type="submit" class="btn btn-outline-danger btn-sm">Delete selected</button>
+            </div>
+        </form>
+        {% else %}
+        <div class="text-center py-5">
+            <p class="text-muted mb-3">No files uploaded yet. Add documents to build your knowledge base.</p>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadDocumentsModal">
+                Upload your first files
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<div class="modal fade portal-modal" id="uploadDocumentsModal" tabindex="-1"
+    aria-labelledby="uploadDocumentsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="/documents/upload" enctype="multipart/form-data" data-loading-modal="true">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadDocumentsModalLabel">Upload files</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">
+                        Files are stored privately for your tenant and appear here once uploaded.
+                    </p>
+                    <div class="mb-3">
+                        <label for="upload_modal_files" class="form-label">Select one or more documents</label>
+                        <input id="upload_modal_files" name="files" type="file" multiple required class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Upload files</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
