@@ -6,7 +6,7 @@
 
 {% block header_actions %}
 <span class="text-white-50 small me-3">{{ user_email }}</span>
-<a href="#documents" class="btn btn-outline-light btn-sm">Documents</a>
+<!-- <a href="#documents" class="btn btn-outline-light btn-sm">Documents</a> -->
 <a href="/logout" class="btn btn-outline-light btn-sm">Log out</a>
 {% endblock %}
 
@@ -40,6 +40,8 @@
 </div>
 {% endif %}
 
+{% set file_count = file_rows | length %}
+
 <div class="portal-stats-grid mb-4">
     <div class="portal-stat-card">
         <span class="portal-stat-label">LLM provider</span>
@@ -64,21 +66,43 @@
             }}</span>
         <span class="portal-stat-hint">Account ID {{ form_values.chatwoot_account_id or "?" }}</span>
     </div>
+    <div class="portal-stat-card">
+        <span class="portal-stat-label">Files ready</span>
+        <span class="portal-stat-value">{{ file_count }}</span>
+        <span class="portal-stat-hint">Stored privately inside your tenant.</span>
+    </div>
+    <div class="portal-stat-card">
+        <span class="portal-stat-label">Current folder</span>
+        <span class="portal-stat-value">{{ client_folder }}</span>
+        <span class="portal-stat-hint">Generated per tenant to isolate docs.</span>
+    </div>
+    <div class="portal-stat-card">
+        <span class="portal-stat-label">Sync status</span>
+        <span class="portal-stat-value{% if documents_message %} text-success{% endif %}">{{ documents_message or
+            "Awaiting refresh"
+            }}</span>
+        <span class="portal-stat-hint">Refresh after uploading new files.</span>
+    </div>
+    <div class="portal-stat-card">
+        <span class="portal-stat-label">Next action</span>
+        <span class="portal-stat-value">On demand</span>
+        <span class="portal-stat-hint">Ingestion runs whenever you trigger it.</span>
+    </div>
 </div>
 
-<form method="post" action="/settings" class="settings-form" data-loading-modal="true">
-    <div class="portal-card portal-card--glass settings-summary-card">
-        <header class="settings-form-header">
-            <div>
-                <p class="text-uppercase small fw-semibold text-muted mb-1">Workspace controls</p>
-                <h3 class="mb-1">Configure your assistant stack</h3>
-                <p class="mb-0 text-muted">Update each section in order: LLM provider, CRM bridge, and Omnichannel.</p>
-            </div>
-            <p class="small mb-0 text-muted">Last saved {{ last_saved_at or "just now" }}</p>
-        </header>
-    </div>
-
-    <div class="accordion settings-accordion" id="settingsAccordion">
+<div class="accordion settings-accordion" id="settingsAccordion">
+    <form method="post" action="/settings" class="settings-form" data-loading-modal="true">
+        <!-- <div class="portal-card portal-card--glass settings-summary-card">
+            <header class="settings-form-header">
+                <div>
+                    <p class="text-uppercase small fw-semibold text-muted mb-1">Workspace controls</p>
+                    <h3 class="mb-1">Configure your assistant stack</h3>
+                    <p class="mb-0 text-muted">Update each section in order: LLM provider, CRM bridge, and Omnichannel.
+                    </p>
+                </div>
+                <p class="small mb-0 text-muted">Last saved {{ last_saved_at or "just now" }}</p>
+            </header>
+        </div> -->
         <div class="accordion-item">
             <h2 class="accordion-header" id="heading-llm">
                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
@@ -141,14 +165,32 @@
                         </div>
                     </div> -->
                     <div class="form-group row mb-3 align-items-center">
-                        <label for="llm_top_k" class="col-md-4 col-form-label">Top K</label>
+                        <label for="llm_top_k" class="col-md-4 col-form-label">
+                            <span class="settings-info-label">
+                                <span>Top K</span>
+                                <span class="settings-info-icon" tabindex="0" role="button" data-bs-toggle="popover"
+                                    data-bs-placement="top" data-bs-trigger="focus hover" data-bs-title="Top K"
+                                    data-bs-content="Controls how many knowledge chunks are retrieved for each answer.">
+                                    <i class="bi bi-info-circle"></i>
+                                </span>
+                            </span>
+                        </label>
                         <div class="col-md-8">
                             <input id="llm_top_k" name="llm_top_k" value="{{ form_values.llm_top_k }}"
                                 class="form-control portal-input">
                         </div>
                     </div>
                     <div class="form-group row mb-3 align-items-center">
-                        <label for="llm_temperature" class="col-md-4 col-form-label">Temperature</label>
+                        <label for="llm_temperature" class="col-md-4 col-form-label">
+                            <span class="settings-info-label">
+                                <span>Temperature</span>
+                                <span class="settings-info-icon" tabindex="0" role="button" data-bs-toggle="popover"
+                                    data-bs-placement="top" data-bs-trigger="focus hover" data-bs-title="Temperature"
+                                    data-bs-content="Lower values keep responses deterministic, higher values add creativity.">
+                                    <i class="bi bi-info-circle"></i>
+                                </span>
+                            </span>
+                        </label>
                         <div class="col-md-8">
                             <input id="llm_temperature" name="llm_temperature" value="{{ form_values.llm_temperature }}"
                                 class="form-control portal-input">
@@ -156,7 +198,17 @@
                     </div>
                     {% set priority_current = form_values.llm_handoff_priority %}
                     <div class="form-group row mb-3 align-items-center">
-                        <label for="llm_handoff_priority" class="col-md-4 col-form-label">Handoff priority</label>
+                        <label for="llm_handoff_priority" class="col-md-4 col-form-label">
+                            <span class="settings-info-label">
+                                <span>Handoff priority</span>
+                                <span class="settings-info-icon" tabindex="0" role="button" data-bs-toggle="popover"
+                                    data-bs-placement="top" data-bs-trigger="focus hover"
+                                    data-bs-title="Handoff priority"
+                                    data-bs-content="Maps to the CRM routing priority when automation escalates.">
+                                    <i class="bi bi-info-circle"></i>
+                                </span>
+                            </span>
+                        </label>
                         <div class="col-md-8">
                             <select id="llm_handoff_priority" name="llm_handoff_priority"
                                 class="form-control portal-input">
@@ -218,25 +270,45 @@
                         </div>
                     </div> -->
                     <div class="form-group row mb-3 align-items-start">
-                        <label for="llm_handoff_public_reply" class="col-md-4 col-form-label">Handoff public
-                            reply</label>
+                        <label for="llm_handoff_public_reply" class="col-md-4 col-form-label">
+                            <span class="settings-info-label">
+                                <span>Handoff public reply</span>
+                                <span class="settings-info-icon" tabindex="0" role="button" data-bs-toggle="popover"
+                                    data-bs-placement="top" data-bs-trigger="focus hover"
+                                    data-bs-title="Handoff public reply"
+                                    data-bs-content="Customer-facing copy sent when the assistant escalates to a person.">
+                                    <i class="bi bi-info-circle"></i>
+                                </span>
+                            </span>
+                        </label>
                         <div class="col-md-8">
                             <textarea id="llm_handoff_public_reply" name="llm_handoff_public_reply" rows="3"
                                 class="form-control portal-input">{{ form_values.llm_handoff_public_reply }}</textarea>
                         </div>
                     </div>
                     <div class="form-group row mb-3 align-items-start">
-                        <label for="llm_handoff_private_note" class="col-md-4 col-form-label">Handoff private
-                            note</label>
+                        <label for="llm_handoff_private_note" class="col-md-4 col-form-label">
+                            <span class="settings-info-label">
+                                <span>Handoff private note</span>
+                                <span class="settings-info-icon" tabindex="0" role="button" data-bs-toggle="popover"
+                                    data-bs-placement="top" data-bs-trigger="focus hover"
+                                    data-bs-title="Handoff private note"
+                                    data-bs-content="Internal context only your teammates see during a takeover.">
+                                    <i class="bi bi-info-circle"></i>
+                                </span>
+                            </span>
+                        </label>
                         <div class="col-md-8">
                             <textarea id="llm_handoff_private_note" name="llm_handoff_private_note" rows="3"
                                 class="form-control portal-input">{{ form_values.llm_handoff_private_note }}</textarea>
                         </div>
                     </div>
+                    <div class="portal-form-actions portal-form-actions--simple settings-section-actions">
+                        <button type="submit" class="btn btn-primary">Save LLM settings</button>
+                    </div>
                 </div>
             </div>
         </div>
-
         <div class="accordion-item">
             <h2 class="accordion-header" id="heading-crm">
                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
@@ -259,12 +331,23 @@
                         </div>
                     </div> -->
                     <div class="form-group row mb-3 align-items-center">
-                        <label for="crm_token" class="col-md-4 col-form-label">API token <span
-                                class="portal-required">*</span></label>
+                        <label for="crm_token" class="col-md-4 col-form-label">
+                            <span class="settings-info-label">
+                                <span>API token <span class="portal-required">*</span></span>
+                                <span class="settings-info-icon" tabindex="0" role="button" data-bs-toggle="popover"
+                                    data-bs-placement="top" data-bs-trigger="focus hover" data-bs-title="CRM API token"
+                                    data-bs-content="Used to push contacts and deals into your CRM during handoff.">
+                                    <i class="bi bi-info-circle"></i>
+                                </span>
+                            </span>
+                        </label>
                         <div class="col-md-8">
                             <input id="crm_token" name="crm_token" value="{{ form_values.crm_token }}" required
                                 class="form-control portal-input">
                         </div>
+                    </div>
+                    <div class="portal-form-actions portal-form-actions--simple settings-section-actions">
+                        <button type="submit" class="btn btn-primary">Save CRM settings</button>
                     </div>
                 </div>
             </div>
@@ -301,8 +384,17 @@
                         </div>
                     </div> -->
                     <div class="form-group row mb-3 align-items-center">
-                        <label for="chatwoot_api_access_token" class="col-md-4 col-form-label">API access token <span
-                                class="portal-required">*</span></label>
+                        <label for="chatwoot_api_access_token" class="col-md-4 col-form-label">
+                            <span class="settings-info-label">
+                                <span>API access token <span class="portal-required">*</span></span>
+                                <span class="settings-info-icon" tabindex="0" role="button" data-bs-toggle="popover"
+                                    data-bs-placement="top" data-bs-trigger="focus hover"
+                                    data-bs-title="Chatwoot API access token"
+                                    data-bs-content="Grants VeriOps permission to read and respond inside Chatwoot.">
+                                    <i class="bi bi-info-circle"></i>
+                                </span>
+                            </span>
+                        </label>
                         <div class="col-md-8">
                             <input id="chatwoot_api_access_token" name="chatwoot_api_access_token"
                                 value="{{ form_values.chatwoot_api_access_token }}" required
@@ -310,130 +402,149 @@
                         </div>
                     </div>
                     <div class="form-group row mb-3 align-items-center">
-                        <label for="chatwoot_bot_access_token" class="col-md-4 col-form-label">Bot access token <span
-                                class="portal-required">*</span></label>
+                        <label for="chatwoot_bot_access_token" class="col-md-4 col-form-label">
+                            <span class="settings-info-label">
+                                <span>Bot access token <span class="portal-required">*</span></span>
+                                <span class="settings-info-icon" tabindex="0" role="button" data-bs-toggle="popover"
+                                    data-bs-placement="top" data-bs-trigger="focus hover"
+                                    data-bs-title="Bot access token"
+                                    data-bs-content="Allows the assistant to send bot replies and route to humans.">
+                                    <i class="bi bi-info-circle"></i>
+                                </span>
+                            </span>
+                        </label>
                         <div class="col-md-8">
                             <input id="chatwoot_bot_access_token" name="chatwoot_bot_access_token"
                                 value="{{ form_values.chatwoot_bot_access_token }}" required
                                 class="form-control portal-input">
                         </div>
                     </div>
+                    <div class="portal-form-actions portal-form-actions--simple settings-section-actions">
+                        <button type="submit" class="btn btn-primary">Save Omnichannel settings</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <div class="accordion-item mt-4" id="documents">
+        <h2 class="accordion-header" id="heading-documents">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapse-documents" aria-expanded="false" aria-controls="collapse-documents">
+                <div>
+                    <p class="text-uppercase small fw-semibold text-muted mb-1">Knowledge base</p>
+                    <span class="text-muted small">Upload, refresh, and curate documents</span>
+                </div>
+            </button>
+        </h2>
+        <div id="collapse-documents" class="accordion-collapse collapse" aria-labelledby="heading-documents"
+            data-bs-parent="#settingsAccordion">
+            <div class="accordion-body settings-panel-body">
+                <form id="deleteDocumentsForm" method="post" action="/documents/files/delete" data-loading-modal="true">
+                </form>
+
+                <div class="settings-docs-toolbar d-flex flex-column flex-lg-row gap-3 mb-4">
+                    <div class="d-flex flex-wrap gap-2 ms-lg-auto justify-content-lg-end">
+                        <button type="submit" form="deleteDocumentsForm" class="btn btn-outline-danger btn-sm">
+                            <i class="bi bi-trash me-1"></i>Delete selected
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+                            data-bs-target="#uploadDocumentsModal">
+                            <i class="bi bi-plus-lg me-1"></i>Add files
+                        </button>
+                    </div>
+                </div>
+
+                {% if file_rows %}
+                <div class="portal-card portal-table">
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="text-center" style="width: 3rem;">
+                                        <span class="visually-hidden">Select</span>
+                                    </th>
+                                    <th scope="col">File name</th>
+                                    <th scope="col" class="text-nowrap">File type</th>
+                                    <th scope="col" class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for file in file_rows %}
+                                <tr>
+                                    <td class="text-center">
+                                        <input class="form-check-input" type="checkbox" name="selected_files"
+                                            value="{{ file.name }}" form="deleteDocumentsForm">
+                                    </td>
+                                    <td class="fw-semibold">{{ file.name }}</td>
+                                    <td><span class="portal-file-type">{{ file.type }}</span></td>
+                                    <td class="text-end">
+                                        <div class="d-inline-flex gap-2">
+                                            <a href="{{ file.url }}" target="_blank" rel="noopener"
+                                                class="btn btn-outline-primary btn-sm" title="Open file">
+                                                <i class="bi bi-box-arrow-up-right"></i>
+                                            </a>
+                                            <form method="post" action="/documents/files/delete" class="mb-0"
+                                                data-loading-modal="true">
+                                                <input type="hidden" name="selected_files" value="{{ file.name }}">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm"
+                                                    title="Delete file">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="settings-docs-foot">
+                        <span class="text-muted small">Selected files will be permanently removed.</span>
+                    </div>
+                </div>
+                {% else %}
+                <div class="portal-card text-center py-5">
+                    <p class="text-muted mb-3">No files uploaded yet. Add documents to build your knowledge base.</p>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal"
+                        data-bs-target="#uploadDocumentsModal">
+                        Upload your first files
+                    </button>
+                </div>
+                {% endif %}
+                <div class="portal-form-actions portal-form-actions--simple settings-section-actions mt-4">
+                    <form method="post" action="/documents/ingest" class="mb-0" data-loading-modal="true">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-arrow-repeat me-2"></i>Refresh knowledge base
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <div class="portal-form-actions portal-form-actions--simple">
-        <button type="submit" class="btn btn-primary px-5">Save changes</button>
-    </div>
-</form>
+<script>
+    window.addEventListener('load', function () {
+        if (!window.bootstrap) {
+            return;
+        }
+        document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function (el) {
+            if (el.dataset.popoverBound === 'true') {
+                return;
+            }
+            new bootstrap.Popover(el, {
+                trigger: 'focus hover',
+                sanitize: true,
+            });
+            el.dataset.popoverBound = 'true';
+        });
+    });
+</script>
 
-<section id="documents" class="mt-5 pt-3">
-    {% set file_count = file_rows | length %}
-    <div class="portal-hero d-flex flex-column flex-lg-row justify-content-between gap-4 align-items-lg-center">
-        <div class="z-1">
-            <span class="portal-pill"><i class="bi bi-folder-fill me-1"></i> Knowledge Base</span>
-            <p>Upload curated content and keep embeddings fresh.</p>
-        </div>
-        <div class="portal-hero-actions d-flex flex-column flex-sm-row gap-3">
-            <form method="post" action="/documents/ingest" class="mb-0" data-loading-modal="true">
-                <button type="submit" class="btn btn-light text-primary fw-semibold">
-                    <i class="bi bi-arrow-repeat me-2"></i>Refresh knowledge base
-                </button>
-            </form>
-        </div>
-    </div>
 
-    <div class="portal-stats-grid">
-        <div class="portal-stat-card">
-            <span class="portal-stat-label">Files ready</span>
-            <span class="portal-stat-value">{{ file_count }}</span>
-            <span class="portal-stat-hint">Stored inside your private tenant workspace.</span>
-        </div>
-        <div class="portal-stat-card">
-            <span class="portal-stat-label">Current folder</span>
-            <span class="portal-stat-value">{{ client_folder }}</span>
-            <span class="portal-stat-hint">Auto-generated per client to keep docs isolated.</span>
-        </div>
-        <div class="portal-stat-card">
-            <span class="portal-stat-label">Sync status</span>
-            <span class="portal-stat-value{% if documents_message %} text-success{% endif %}">{{ documents_message or "Awaiting refresh"
-                }}</span>
-            <span class="portal-stat-hint">Use “Refresh knowledge base” after uploads.</span>
-        </div>
-        <div class="portal-stat-card">
-            <span class="portal-stat-label">Next action</span>
-            <span class="portal-stat-value">On demand</span>
-            <span class="portal-stat-hint">Ingestion runs whenever you trigger it.</span>
-        </div>
-    </div>
-
-    <div class="portal-card portal-table">
-        <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-4">
-            <div>
-                <h3 class="h4 mb-1">Files in your knowledge base</h3>
-                <p class="text-muted mb-0">Select files to delete or open them in a dedicated tab.</p>
-            </div>
-            <div class="d-flex gap-2">
-                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal"
-                    data-bs-target="#uploadDocumentsModal">
-                    <i class="bi bi-plus-lg me-1"></i> Add files
-                </button>
-            </div>
-        </div>
-
-        {% if file_rows %}
-        <form method="post" action="/documents/files/delete" class="d-grid gap-3" data-loading-modal="true">
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th scope="col" class="text-center" style="width: 3rem;">
-                                <span class="visually-hidden">Select</span>
-                            </th>
-                            <th scope="col">File name</th>
-                            <th scope="col" class="text-nowrap">File type</th>
-                            <th scope="col" class="text-end">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for file in file_rows %}
-                        <tr>
-                            <td class="text-center">
-                                <input class="form-check-input" type="checkbox" name="selected_files"
-                                    value="{{ file.name }}">
-                            </td>
-                            <td class="fw-semibold">{{ file.name }}</td>
-                            <td><span class="portal-file-type">{{ file.type }}</span></td>
-                            <td class="text-end">
-                                <a href="{{ file.url }}" target="_blank" rel="noopener"
-                                    class="btn btn-outline-primary btn-sm">
-                                    <i class="bi bi-box-arrow-up-right"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            <div class="portal-table-actions">
-                <span class="text-muted small">Selected files will be permanently removed.</span>
-                <button type="submit" class="btn btn-outline-danger btn-sm">Delete selected</button>
-            </div>
-        </form>
-        {% else %}
-        <div class="text-center py-5">
-            <p class="text-muted mb-3">No files uploaded yet. Add documents to build your knowledge base.</p>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadDocumentsModal">
-                Upload your first files
-            </button>
-        </div>
-        {% endif %}
-    </div>
-</section>
-
-<div class="modal fade portal-modal" id="uploadDocumentsModal" tabindex="-1"
-    aria-labelledby="uploadDocumentsModalLabel" aria-hidden="true">
+<div class="modal fade portal-modal" id="uploadDocumentsModal" tabindex="-1" aria-labelledby="uploadDocumentsModalLabel"
+    aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <form method="post" action="/documents/upload" enctype="multipart/form-data" data-loading-modal="true">
