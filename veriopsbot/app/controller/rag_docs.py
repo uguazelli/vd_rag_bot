@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 import shutil
 from pathlib import Path
 from typing import List, Sequence
@@ -39,22 +38,14 @@ def _resolve_storage_root() -> Path:
 
 STORAGE_ROOT: Path = _resolve_storage_root()
 _CLIENT_FOLDER_PREFIX = "client"
-_SLUG_REGEX = re.compile(r"[^a-z0-9]+")
-
 
 def tenant_folder_name(tenant_id: int, *, tenant_email: str | None = None) -> str:
     """
     Determine the canonical folder name for a tenant.
 
-    Includes a sanitized version of the tenant's email domain (when available)
-    plus the tenant id to guarantee uniqueness.
+    We intentionally keep the pattern simple to avoid depending on domains that
+    many small tenants may not have.
     """
-    domain = ""
-    if tenant_email and "@" in tenant_email:
-        domain = tenant_email.split("@", 1)[1]
-    slug = _SLUG_REGEX.sub("-", domain.lower()).strip("-") if domain else ""
-    if slug:
-        return f"{_CLIENT_FOLDER_PREFIX}-{slug}-{tenant_id}"
     return f"{_CLIENT_FOLDER_PREFIX}-{tenant_id}"
 
 

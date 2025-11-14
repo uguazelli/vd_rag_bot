@@ -64,9 +64,24 @@ RETURNING request_count;
 
 
 SQL_GET_USER_BY_EMAIL = """
-SELECT id, tenant_id, email, password_hash
+SELECT id, tenant_id, email, password_hash, is_admin
 FROM veriops_users
 WHERE email = %(email)s
+"""
+
+SQL_GET_USER_BY_ID = """
+SELECT id, tenant_id, email, password_hash, is_admin
+FROM veriops_users
+WHERE id = %(user_id)s
+"""
+
+SQL_UPDATE_USER_ACCOUNT = """
+UPDATE veriops_users
+SET email = %(email)s,
+    password_hash = COALESCE(%(password_hash)s, password_hash),
+    modified_at = NOW()
+WHERE id = %(user_id)s
+RETURNING id, tenant_id, email, is_admin
 """
 
 
@@ -92,7 +107,7 @@ WHERE id = %(omnichannel_id)s
 
 
 SQL_INSERT_USER = """
-INSERT INTO veriops_users (tenant_id, email, password_hash, modified_at)
-VALUES (%(tenant_id)s, %(email)s, %(password_hash)s, NOW())
-RETURNING id, tenant_id, email
+INSERT INTO veriops_users (tenant_id, email, password_hash, is_admin, modified_at)
+VALUES (%(tenant_id)s, %(email)s, %(password_hash)s, %(is_admin)s, NOW())
+RETURNING id, tenant_id, email, is_admin
 """

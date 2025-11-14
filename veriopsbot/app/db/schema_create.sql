@@ -275,6 +275,7 @@ CREATE TABLE public.veriops_users (
     id bigint NOT NULL,
     tenant_id bigint,
     email text NOT NULL,
+    is_admin boolean DEFAULT false,
     password_hash text NOT NULL,
     modified_at timestamp with time zone DEFAULT now()
 );

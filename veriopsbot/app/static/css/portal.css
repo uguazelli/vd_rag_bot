@@ -98,15 +98,18 @@ main.container {
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--portal-muted);
+    color: var(--portal-primary);
+}
+
+.portal-stat-label i {
+    color: var(--portal-primary) !important;
 }
 
 .portal-stat-value {
     display: block;
     margin: 6px 0;
-    color: var(--portal-primary);
+    color: var(--portal-text);
     font-size: 1rem;
-    font-weight: 600;
     line-height: 1.35;
     overflow-wrap: anywhere;
     word-break: break-all;
@@ -169,6 +172,15 @@ main.container {
     padding: 20px 24px;
     font-weight: 600;
     /* background: rgba(124, 77, 255, 0.08); */
+}
+
+.settings-accordion .accordion-button {
+    color: var(--portal-text);
+}
+
+.settings-accordion .accordion-button i.text-primary,
+.settings-accordion .accordion-button p {
+    color: var(--portal-primary) !important;
 }
 
 .settings-accordion .accordion-button:not(.collapsed) {
@@ -267,18 +279,18 @@ main.container {
 }
 
 .portal-table table {
-    border-radius: 25px;
+    border-radius: 5px;
     overflow: hidden;
-}
-
-.portal-table thead {
-    background: #f3ecff;
 }
 
 .portal-table th {
     color: var(--portal-muted);
     font-weight: 600;
     border: none;
+}
+
+.portal-table thead th.text-end {
+    padding-right: 1rem;
 }
 
 .portal-table td {

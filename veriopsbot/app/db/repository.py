@@ -148,10 +148,28 @@ async def get_user_by_email(email: str) -> Dict[str, Any]:
     return await anyio.to_thread.run_sync(_query)
 
 
+async def get_user_by_id(user_id: int) -> Dict[str, Any]:
+    """
+    Fetch a single user record by id. Returns {} when not found.
+    """
+
+    def _query() -> Dict[str, Any]:
+        with get_connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                queries.SQL_GET_USER_BY_ID,
+                {"user_id": user_id},
+            )
+            return cur.fetchone() or {}
+
+    return await anyio.to_thread.run_sync(_query)
+
+
 async def create_user(
     tenant_id: int,
     email: str,
     password_hash: str,
+    *,
+    is_admin: bool = False,
 ) -> Dict[str, Any]:
     """
     Insert a new user row and return the created record.
@@ -165,6 +183,7 @@ async def create_user(
                     "tenant_id": tenant_id,
                     "email": email,
                     "password_hash": password_hash,
+                    "is_admin": is_admin,
                 },
             )
             row = cur.fetchone() or {}
@@ -172,6 +191,33 @@ async def create_user(
             return row
 
     return await anyio.to_thread.run_sync(_insert)
+
+
+async def update_user_account(
+    user_id: int,
+    *,
+    email: str,
+    password_hash: str | None = None,
+) -> Dict[str, Any]:
+    """
+    Update a user's email and/or password hash.
+    """
+
+    def _update() -> Dict[str, Any]:
+        with get_connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                queries.SQL_UPDATE_USER_ACCOUNT,
+                {
+                    "user_id": user_id,
+                    "email": email,
+                    "password_hash": password_hash,
+                },
+            )
+            row = cur.fetchone() or {}
+            conn.commit()
+            return row
+
+    return await anyio.to_thread.run_sync(_update)
 
 
 async def update_llm_settings(

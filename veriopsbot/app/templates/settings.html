@@ -6,7 +6,9 @@
 
 {% block header_actions %}
 <span class="text-white-50 small me-3">{{ user_email }}</span>
-<!-- <a href="#documents" class="btn btn-outline-light btn-sm">Documents</a> -->
+{% if is_admin %}
+<a href="/admin/users" class="btn btn-outline-light btn-sm me-2">Admin</a>
+{% endif %}
 <a href="/logout" class="btn btn-outline-light btn-sm">Log out</a>
 {% endblock %}
 
@@ -15,8 +17,8 @@
     <div class="row align-items-center g-4">
         <div class="col-lg-12">
             <span class="portal-pill"><i class="bi bi-sliders2-vertical me-1"></i>Settings</span>
-            <p>Tune your assistant stack.
-                Manage providers, CRM credentials, and omnichannel access for your workspace.</p>
+            <p>Fine-tune your assistant stack with confidence: configure LLM defaults, keep CRM credentials aligned, and
+                sync omnichannel handoffs so every conversation feels seamless.</p>
         </div>
     </div>
 </div>
@@ -44,47 +46,47 @@
 
 <div class="portal-stats-grid mb-4">
     <div class="portal-stat-card">
-        <span class="portal-stat-label">LLM provider</span>
+        <span class="portal-stat-label"><i class="bi bi-cpu me-2 text-primary"></i>LLM provider</span>
         <span class="portal-stat-value">{{ form_values.llm_name or "Not set" }}</span>
         <span class="portal-stat-hint">Model: {{ form_values.llm_model_answer or "—" }}</span>
     </div>
     <div class="portal-stat-card">
-        <span class="portal-stat-label">Embedding model</span>
+        <span class="portal-stat-label"><i class="bi bi-diagram-2 me-2 text-primary"></i>Embedding model</span>
         <span class="portal-stat-value">{{ form_values.llm_openai_embed_model or "—"
             }}</span>
         <span class="portal-stat-hint">Used for RAG ingestion.</span>
     </div>
     <div class="portal-stat-card">
-        <span class="portal-stat-label">CRM endpoint</span>
+        <span class="portal-stat-label"><i class="bi bi-building-gear me-2 text-primary"></i>CRM endpoint</span>
         <span class="portal-stat-value">{{ form_values.crm_url or "Not configured"
             }}</span>
         <span class="portal-stat-hint">Token ending with {{ (form_values.crm_token or "")[-4:] }}</span>
     </div>
     <div class="portal-stat-card">
-        <span class="portal-stat-label">Chatwoot</span>
+        <span class="portal-stat-label"><i class="bi bi-chat-dots me-2 text-primary"></i>Chatwoot</span>
         <span class="portal-stat-value">{{ form_values.chatwoot_api_url or "—"
             }}</span>
         <span class="portal-stat-hint">Account ID {{ form_values.chatwoot_account_id or "?" }}</span>
     </div>
     <div class="portal-stat-card">
-        <span class="portal-stat-label">Files ready</span>
+        <span class="portal-stat-label"><i class="bi bi-folder-check me-2 text-primary"></i>Files ready</span>
         <span class="portal-stat-value">{{ file_count }}</span>
         <span class="portal-stat-hint">Stored privately inside your tenant.</span>
     </div>
     <div class="portal-stat-card">
-        <span class="portal-stat-label">Current folder</span>
+        <span class="portal-stat-label"><i class="bi bi-hdd-stack me-2 text-primary"></i>Current folder</span>
         <span class="portal-stat-value">{{ client_folder }}</span>
         <span class="portal-stat-hint">Generated per tenant to isolate docs.</span>
     </div>
     <div class="portal-stat-card">
-        <span class="portal-stat-label">Sync status</span>
+        <span class="portal-stat-label"><i class="bi bi-activity me-2 text-primary"></i>Sync status</span>
         <span class="portal-stat-value{% if documents_message %} text-success{% endif %}">{{ documents_message or
             "Awaiting refresh"
             }}</span>
         <span class="portal-stat-hint">Refresh after uploading new files.</span>
     </div>
     <div class="portal-stat-card">
-        <span class="portal-stat-label">Next action</span>
+        <span class="portal-stat-label"><i class="bi bi-arrow-repeat me-2 text-primary"></i>Next action</span>
         <span class="portal-stat-value">On demand</span>
         <span class="portal-stat-hint">Ingestion runs whenever you trigger it.</span>
     </div>
@@ -108,7 +110,8 @@
                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                     data-bs-target="#collapse-llm" aria-expanded="false" aria-controls="collapse-llm">
                     <div>
-                        <p class="text-uppercase small fw-semibold text-muted mb-1">LLM provider</p>
+                        <p class="text-uppercase small fw-semibold text-muted mb-1"><i
+                                class="bi bi-cpu me-2 text-primary"></i>LLM provider</p>
                         <span class="text-muted small">Language + retrieval defaults</span>
                     </div>
                 </button>
@@ -314,7 +317,8 @@
                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                     data-bs-target="#collapse-crm" aria-expanded="false" aria-controls="collapse-crm">
                     <div>
-                        <p class="text-uppercase small fw-semibold text-muted mb-1">CRM bridge</p>
+                        <p class="text-uppercase small fw-semibold text-muted mb-1"><i
+                                class="bi bi-building-gear me-2 text-primary"></i>CRM bridge</p>
                         <span class="text-muted small">Sync contacts and deals at handoff</span>
                     </div>
                 </button>
@@ -358,7 +362,8 @@
                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                     data-bs-target="#collapse-omni" aria-expanded="false" aria-controls="collapse-omni">
                     <div>
-                        <p class="text-uppercase small fw-semibold text-muted mb-1">Omnichannel</p>
+                        <p class="text-uppercase small fw-semibold text-muted mb-1"><i
+                                class="bi bi-chat-dots me-2 text-primary"></i>Omnichannel</p>
                         <span class="text-muted small">Chatwoot credentials</span>
                     </div>
                 </button>
@@ -432,7 +437,8 @@
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                 data-bs-target="#collapse-documents" aria-expanded="false" aria-controls="collapse-documents">
                 <div>
-                    <p class="text-uppercase small fw-semibold text-muted mb-1">Knowledge base</p>
+                    <p class="text-uppercase small fw-semibold text-muted mb-1"><i
+                            class="bi bi-folder2-open me-2 text-primary"></i>Knowledge base</p>
                     <span class="text-muted small">Upload, refresh, and curate documents</span>
                 </div>
             </button>
@@ -469,7 +475,7 @@
                                     <th scope="col" class="text-end">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody class="table-group-divider">
                                 {% for file in file_rows %}
                                 <tr>
                                     <td class="text-center">
@@ -519,6 +525,66 @@
                         </button>
                     </form>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="accordion-item mt-4" id="account">
+        <h2 class="accordion-header" id="heading-account">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapse-account" aria-expanded="false" aria-controls="collapse-account">
+                <div>
+                    <p class="text-uppercase small fw-semibold text-muted mb-1"><i
+                            class="bi bi-person-lock me-2 text-primary"></i>Account &amp; security</p>
+                    <span class="text-muted small">Update your login email or password</span>
+                </div>
+            </button>
+        </h2>
+        <div id="collapse-account" class="accordion-collapse collapse" aria-labelledby="heading-account"
+            data-bs-parent="#settingsAccordion">
+            <div class="accordion-body settings-panel-body">
+                <form method="post" action="/settings/account" class="d-grid gap-3"
+                    data-loading-modal="true" autocomplete="off">
+                    <div class="form-group row mb-3 align-items-center">
+                        <label class="col-md-4 col-form-label">Current email</label>
+                        <div class="col-md-8">
+                            <input type="email" class="form-control portal-input" value="{{ user_email }}" readonly>
+                        </div>
+                    </div>
+                    <div class="form-group row mb-3 align-items-center">
+                        <label class="col-md-4 col-form-label">New email</label>
+                        <div class="col-md-8">
+                            <input type="email" name="new_email" class="form-control portal-input"
+                                placeholder="name@company.com" value="{{ account_form.new_email or '' }}">
+                            <div class="settings-field-hint">Leave blank to keep your existing email.</div>
+                        </div>
+                    </div>
+                    <div class="form-group row mb-3 align-items-center">
+                        <label class="col-md-4 col-form-label">Current password <span
+                                class="portal-required">*</span></label>
+                        <div class="col-md-8">
+                            <input type="password" name="current_password" class="form-control portal-input" required>
+                            <div class="settings-field-hint">Required to verify account changes.</div>
+                        </div>
+                    </div>
+                    <div class="form-group row mb-3 align-items-center">
+                        <label class="col-md-4 col-form-label">New password</label>
+                        <div class="col-md-8">
+                            <input type="password" name="new_password" class="form-control portal-input" minlength="8">
+                            <div class="settings-field-hint">Leave blank to keep your current password.</div>
+                        </div>
+                    </div>
+                    <div class="form-group row mb-3 align-items-center">
+                        <label class="col-md-4 col-form-label">Confirm new password</label>
+                        <div class="col-md-8">
+                            <input type="password" name="confirm_new_password" class="form-control portal-input"
+                                minlength="8">
+                        </div>
+                    </div>
+                    <div class="portal-form-actions portal-form-actions--simple settings-section-actions">
+                        <button type="submit" class="btn btn-primary">Save account settings</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

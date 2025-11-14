@@ -17,11 +17,13 @@ from app.db.repository import (
     create_user,
     get_params_by_tenant_id,
     get_user_by_email,
+    get_user_by_id,
     invalidate_params_cache,
     invalidate_tenant_params_cache,
     update_crm_settings,
     update_llm_settings,
     update_omnichannel_settings,
+    update_user_account,
 )
 
 router = APIRouter()
@@ -141,6 +143,7 @@ def _issue_session_response(
         "user_id": user["id"],
         "tenant_id": user["tenant_id"],
         "email": user["email"],
+        "is_admin": bool(user.get("is_admin")),
     }
     response = RedirectResponse(
         url=redirect_url,
@@ -217,14 +220,17 @@ def _settings_template_context(
     message: str | None,
     errors: list[str],
     documents_message: str | None = None,
+    account_form: Dict[str, str] | None = None,
 ) -> Dict[str, Any]:
     context: Dict[str, Any] = {
         "request": request,
         "user_email": session["email"],
+        "is_admin": session.get("is_admin", False),
         "form_values": form_values,
         "message": message,
         "errors": errors,
         "documents_message": documents_message,
+        "account_form": account_form or {"new_email": ""},
         "provider_options": PROVIDER_OPTIONS,
         "model_options": MODEL_OPTIONS,
         "handoff_priorities": HANDOFF_PRIORITIES,
@@ -233,6 +239,24 @@ def _settings_template_context(
     }
     context.update(_build_documents_context(session))
     return context
+
+
+def _admin_template_context(
+    request: Request,
+    session: Dict[str, Any],
+    *,
+    message: str | None = None,
+    errors: list[str] | None = None,
+    form_data: Dict[str, str] | None = None,
+) -> Dict[str, Any]:
+    return {
+        "request": request,
+        "user_email": session["email"],
+        "is_admin": True,
+        "message": message,
+        "errors": errors or [],
+        "form_data": form_data or {"target_email": "", "new_email": ""},
+    }
 
 
 def _build_form_values(
@@ -785,6 +809,296 @@ async def update_settings(request: Request):
         ),
     )
 
+
+def _ensure_admin_session(request: Request) -> Dict[str, Any] | None:
+    session = _get_session(request)
+    if not session or not session.get("is_admin"):
+        return None
+    return session
+
+
+@router.get("/admin/users", response_class=HTMLResponse)
+async def admin_users_page(request: Request):
+    session = _ensure_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    message = request.query_params.get("message")
+    return templates.TemplateResponse(
+        "admin_users.html",
+        _admin_template_context(
+            request,
+            session,
+            message=message,
+            errors=[],
+        ),
+    )
+
+
+@router.post("/admin/users", response_class=HTMLResponse)
+async def admin_update_user(request: Request):
+    session = _ensure_admin_session(request)
+    if not session:
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    form = await request.form()
+    form_dict: Dict[str, str] = {
+        key: (value.strip() if isinstance(value, str) else value)
+        for key, value in form.items()
+    }
+    _log("form", route="POST /admin/users", received=_safe_map(form_dict))
+
+    target_email_raw = (form_dict.get("target_email") or "").strip()
+    target_email = target_email_raw.lower()
+    new_email_raw = (form_dict.get("new_email") or "").strip()
+    new_email = new_email_raw.lower()
+    new_password = form_dict.get("new_password") or ""
+    confirm_new_password = form_dict.get("confirm_new_password") or ""
+
+    form_data = {
+        "target_email": target_email_raw,
+        "new_email": new_email_raw,
+    }
+
+    errors: list[str] = []
+
+    if not target_email:
+        errors.append("Client email is required.")
+
+    target_user: Dict[str, Any] = {}
+    if not errors:
+        try:
+            target_user = await get_user_by_email(target_email)
+            _log("db", op="get_user_by_email", email=target_email, found=bool(target_user))
+        except Exception as e:
+            _log("error", route="POST /admin/users", during="get_user_by_email", error=str(e))
+            raise
+        if not target_user:
+            errors.append("Client account was not found.")
+
+    if not new_email and not new_password:
+        errors.append("Enter a new email or password to update the client account.")
+
+    if new_email:
+        if "@" not in new_email or "." not in new_email:
+            errors.append("Enter a valid new email address.")
+        elif target_user and new_email == target_user.get("email"):
+            errors.append("New email must differ from the current email.")
+        else:
+            try:
+                existing = await get_user_by_email(new_email)
+                _log("db", op="get_user_by_email", email=new_email, exists=bool(existing))
+            except Exception as e:
+                _log("error", route="POST /admin/users", during="get_user_by_email(new)", error=str(e))
+                raise
+            if existing and target_user and existing.get("id") != target_user.get("id"):
+                errors.append("That email is already assigned to another user.")
+
+    password_hash_update: str | None = None
+    if new_password:
+        if len(new_password) < 8:
+            errors.append("New password must be at least 8 characters long.")
+        if new_password != confirm_new_password:
+            errors.append("New password and confirmation do not match.")
+        if not errors:
+            password_hash_update = bcrypt.hashpw(
+                new_password.encode("utf-8"),
+                bcrypt.gensalt(),
+            ).decode("utf-8")
+
+    if errors:
+        _log("warn", route="POST /admin/users", errors=errors)
+        return templates.TemplateResponse(
+            "admin_users.html",
+            _admin_template_context(
+                request,
+                session,
+                errors=errors,
+                form_data=form_data,
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    updated_email = new_email if new_email else target_user["email"]
+
+    try:
+        updated_user = await update_user_account(
+            user_id=target_user["id"],
+            email=updated_email,
+            password_hash=password_hash_update,
+        )
+        _log("db", op="update_user_account", target_id=target_user["id"], success=bool(updated_user))
+    except Exception as e:
+        _log("error", route="POST /admin/users", during="update_user_account", error=str(e))
+        errors.append("Unable to update the client account. Please try again.")
+        return templates.TemplateResponse(
+            "admin_users.html",
+            _admin_template_context(
+                request,
+                session,
+                errors=errors,
+                form_data=form_data,
+            ),
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    if target_user["id"] == session["user_id"]:
+        session["email"] = updated_user.get("email", updated_email)
+
+    message = f"Updated credentials for {updated_user.get('email', updated_email)}."
+    _log("exit", route="POST /admin/users", status="success")
+    return templates.TemplateResponse(
+        "admin_users.html",
+        _admin_template_context(
+            request,
+            session,
+            message=message,
+            form_data={"target_email": "", "new_email": ""},
+        ),
+    )
+
+
+@router.post("/settings/account", response_class=HTMLResponse)
+async def update_account_settings(request: Request):
+    _log("enter", route="POST /settings/account")
+    session = _get_session(request)
+    if not session:
+        _log("warn", route="POST /settings/account", reason="no session -> redirect /login")
+        return RedirectResponse(
+            url="/login",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    try:
+        config = await get_params_by_tenant_id(session["tenant_id"])
+        _log("db", op="get_params_by_tenant_id", tenant_id=session["tenant_id"], has_config=bool(config))
+    except Exception as e:
+        _log("error", route="POST /settings/account", during="get_params_by_tenant_id", error=str(e))
+        raise
+
+    form = await request.form()
+    form_dict: Dict[str, str] = {
+        key: (value.strip() if isinstance(value, str) else value)
+        for key, value in form.items()
+    }
+    _log("form", route="POST /settings/account", received=_safe_map(form_dict))
+
+    new_email_raw = (form_dict.get("new_email") or "").strip()
+    new_email = new_email_raw.lower()
+    current_password = form_dict.get("current_password") or ""
+    new_password = form_dict.get("new_password") or ""
+    confirm_new_password = form_dict.get("confirm_new_password") or ""
+
+    errors: list[str] = []
+
+    try:
+        user = await get_user_by_id(session["user_id"])
+        _log("db", op="get_user_by_id", user_id=session["user_id"], found=bool(user))
+    except Exception as e:
+        _log("error", route="POST /settings/account", during="get_user_by_id", error=str(e))
+        raise
+
+    if not user:
+        errors.append("User account not found. Please log in again.")
+
+    if not current_password:
+        errors.append("Current password is required.")
+
+    changes_requested = bool(new_email) or bool(new_password)
+    if not changes_requested:
+        errors.append("Provide a new email or password to update your account.")
+
+    password_hash = (user or {}).get("password_hash")
+    if not errors:
+        if not password_hash or not bcrypt.checkpw(
+            current_password.encode("utf-8"),
+            password_hash.encode("utf-8"),
+        ):
+            errors.append("Current password is incorrect.")
+
+    if new_email:
+        if "@" not in new_email or "." not in new_email:
+            errors.append("Enter a valid email address.")
+        elif user and new_email == user.get("email"):
+            errors.append("New email must be different from the current email.")
+        else:
+            try:
+                existing = await get_user_by_email(new_email)
+                _log("db", op="get_user_by_email", email=new_email, exists=bool(existing))
+            except Exception as e:
+                _log("error", route="POST /settings/account", during="get_user_by_email", error=str(e))
+                raise
+            if existing and existing.get("id") != (user or {}).get("id"):
+                errors.append("That email is already in use.")
+
+    password_hash_update: str | None = None
+    if new_password:
+        if len(new_password) < 8:
+            errors.append("New password must be at least 8 characters long.")
+        if new_password != confirm_new_password:
+            errors.append("New password and confirmation do not match.")
+        if not errors:
+            password_hash_update = bcrypt.hashpw(
+                new_password.encode("utf-8"),
+                bcrypt.gensalt(),
+            ).decode("utf-8")
+
+    form_values = _build_form_values(config)
+
+    if errors:
+        _log("warn", route="POST /settings/account", errors=errors)
+        return templates.TemplateResponse(
+            "settings.html",
+            _settings_template_context(
+                request,
+                session,
+                form_values,
+                message=None,
+                errors=errors,
+                account_form={"new_email": new_email_raw},
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    updated_email = new_email if new_email else user["email"]
+
+    try:
+        updated_user = await update_user_account(
+            user_id=user["id"],
+            email=updated_email,
+            password_hash=password_hash_update,
+        )
+        _log("db", op="update_user_account", user_id=user["id"], success=bool(updated_user))
+    except Exception as e:
+        _log("error", route="POST /settings/account", during="update_user_account", error=str(e))
+        errors.append("Unable to update account. Please try again.")
+        return templates.TemplateResponse(
+            "settings.html",
+            _settings_template_context(
+                request,
+                session,
+                form_values,
+                message=None,
+                errors=errors,
+                account_form={"new_email": new_email_raw},
+            ),
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    session["email"] = updated_user.get("email", updated_email)
+
+    _log("exit", route="POST /settings/account", status="success")
+    return templates.TemplateResponse(
+        "settings.html",
+        _settings_template_context(
+            request,
+            session,
+            form_values,
+            message="Account settings updated successfully.",
+            errors=[],
+            account_form={"new_email": ""},
+        ),
+    )
 
 @router.get("/documents", response_class=HTMLResponse)
 async def documents_page(request: Request):
